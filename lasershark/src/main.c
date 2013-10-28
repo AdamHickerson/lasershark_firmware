@@ -19,7 +19,7 @@
  */
 
 #ifdef __USE_CMSIS
-#include "LPC13xx.h"
+#include "LPC13Uxx.h"
 #endif
 
 #include <cr_section_macros.h>
@@ -27,11 +27,9 @@
 #include <stdbool.h>
 #include "config.h"
 #include "gpio.h"
-#include "usb.h"
-#include "usbcfg.h"
 #include "usbhw.h"
-#include "usbcore.h"
-#include "usbdesc.h"
+#include "mw_usbd.h"
+#include "mw_usbd_desc.h"
 #include "type.h"
 #include "lasershark.h"
 
@@ -48,8 +46,8 @@ __CRP const unsigned int CRP_WORD = CRP_NO_CRP;
 
 #if (WATCHDOG_ENABLED)
 void watchdog_feed() {
-	LPC_WDT->FEED = 0xAA;
-	LPC_WDT->FEED = 0x55;
+	LPC_WWDT->FEED = 0xAA;
+	LPC_WWDT->FEED = 0x55;
 }
 
 void watchdog_init() {
@@ -59,20 +57,11 @@ void watchdog_init() {
 	LPC_SYSCON->WDTOSCCTRL = 0x1 << 5 | 0xF; // FREQSEL = 1.4Mhz, 64 =  ~9.375kHz
 	LPC_SYSCON->PDRUNCFG &= ~(0x1 << 6); // Power WDTOSC
 
-	LPC_SYSCON->WDTCLKSEL = 0x02; // Use WDTOSC as the WTD clock source
-
-	LPC_SYSCON->WDTCLKUEN = 0x01; // Update clock source
-	// Write 0 then 1 to apply
-	LPC_SYSCON->WDTCLKUEN = 0x00;
-	LPC_SYSCON->WDTCLKUEN = 0x01;
-	while (!(LPC_SYSCON->WDTCLKUEN & 0x01))
-		; // Wait for update to occur.
-
-	LPC_SYSCON->WDTCLKDIV = 0x01; // Enabled WDTCLK and set it to divide by 1 (7.8KHz)
+	LPC_WWDT->CLKSEL = 0x01; // Use WDTOSC as the WTD clock source
 
 	NVIC_EnableIRQ(WDT_IRQn);
-	LPC_WDT->TC = 256; // Delay = <276 (minimum of 256, max of 2^24)>*4 / 9.375khz(WDTCLK) =0.10922666666 s
-	LPC_WDT->MOD = WDEN | WDRESET; // Cause reset to occur when WDT hits.
+	LPC_WWDT->TC = 256; // Delay = <276 (minimum of 256, max of 2^24)>*4 / 9.375khz(WDTCLK) =0.10922666666 s
+	LPC_WWDT->MOD = WDEN | WDRESET; // Cause reset to occur when WDT hits.
 
 	watchdog_feed();
 }
@@ -83,6 +72,7 @@ int main(void) {
 	 * from the startup code. SystemInit() and chip settings are defined
 	 * in the CMSIS system_<part family>.c file.
 	 */
+	SystemCoreClockUpdate ();
 
 	/* Initialize GPIO (sets up clock) */
 	GPIOInit();
@@ -93,9 +83,9 @@ int main(void) {
 	 * to insist the board is not connected when being programmed.
 	 */
 	/* Make pin functions digital IOs, pulldowns enabled, ADMODE=digital. */
-	LPC_IOCON->R_PIO1_1 = (1 << 0) | (0x1 << 3) | (1 << 7); // C
-	LPC_IOCON->R_PIO1_2 = (1 << 0) | (0x1 << 3) | (1 << 7); // INTL A
-	LPC_IOCON->R_PIO1_0 = (1 << 0) | (0x1 << 3) | (1 << 7); // INTL B
+	LPC_IOCON->PIO1_1 = (1 << 0) | (0x1 << 3) | (1 << 7); // C
+	LPC_IOCON->PIO1_2 = (1 << 0) | (0x1 << 3) | (1 << 7); // INTL A
+	LPC_IOCON->PIO1_0 = (1 << 0) | (0x1 << 3) | (1 << 7); // INTL B
 
 	/* Set LED port pin to output */
 	GPIOSetDir(LED_PORT, USR1_LED_BIT, 1);
@@ -107,26 +97,19 @@ int main(void) {
 	// Set initial state of lasershark ASAP!
 	lasershark_init();
 
+	// Turn on USB
 	USBIOClkConfig();
 
 	usb_populate_serialno(); // Populate the devices serial number
-	USB_Init(); // USB Initialization
+	// USB Initialization
+	USB_Init();
+
 	// Make USB a lower priority than the timer used for output.
-	NVIC_SetPriority(USB_IRQn, 2);
-	USB_Connect(TRUE); // USB Connect
+	NVIC_SetPriority(USB_IRQ_IRQn, 2);
 
 #if (WATCHDOG_ENABLED)
 	watchdog_init();
 #endif
-
-	while (!USB_Configuration) // wait until USB is configured
-	{
-#if (WATCHDOG_ENABLED)
-		watchdog_feed();
-#else
-		asm("nop");
-#endif
-	}
 
 	while (1) {
 #if (WATCHDOG_ENABLED)

@@ -1,9 +1,9 @@
 /****************************************************************************
- *   $Id:: power_api.h 6085 2011-01-05 23:55:06Z usb00423                   $
- *   Project: NXP LPC13xx software example  
+ *   $Id:: power_api.h 6249 2011-01-25 19:23:47Z usb01267                   $
+ *   Project: NXP LPC13Uxx software example  
  *
  *   Description:
- *     Power API Header File for NXP LPC13xx Device Series 
+ *     Power API Header File for NXP LPC13Uxx Device Series 
  *
  ****************************************************************************
  * Software that is described herein is for illustrative purposes only
@@ -17,14 +17,20 @@
  * warranty that such application will be suitable for the specified
  * use without further testing or modification.
 ****************************************************************************/
-#ifndef __POWER_API_H__
-#define __POWER_API_H__
+#ifndef __LPC13UXX_POWER_API_H__
+#define __LPC13UXX_POWER_API_H__
 
 #ifdef __cplusplus
  extern "C" {
 #endif 
 
 #define PWRROMD_PRESENT
+
+#define USBROMD_PRESENT
+
+#ifdef USBROMD_PRESENT
+#include "mw_usbd_rom_api.h"
+#endif
 
 typedef	struct _PWRD {
   void (*set_pll)(unsigned int cmd[], unsigned int resp[]);
@@ -33,7 +39,7 @@ typedef	struct _PWRD {
 
 typedef	struct _ROM {
 #ifdef USBROMD_PRESENT
-   const USB * pUSBD;
+   const USBD_API_T * pUSBD;
 #else
    const unsigned p_usbd;
 #endif /* USBROMD_PRESENT */
@@ -54,9 +60,9 @@ typedef	struct _ROM {
 #define	CPU_FREQ_EQU  		0       //main PLL freq must be equal to the specified 
 #define	CPU_FREQ_LTE		1       //main PLL freq must be less than or equal the specified
 #define	CPU_FREQ_GTE		2       //main PLL freq must be greater than or equal the specified
-#define	CPU_FREQ_CLOSE		3       //main PLL freq must be as close as possible the specified
+#define	CPU_FREQ_APPROX		3       //main PLL freq must be as close as possible the specified
 
-#define	PLL_CMD_CUCCESS		0       //PLL setup successfully found
+#define	PLL_CMD_SUCCESS		0       //PLL setup successfully found
 #define	PLL_INVALID_FREQ	1       //specified freq out of range (either input or output)
 #define	PLL_INVALID_MODE	2       //invalid mode (see above for valid) specified
 #define	PLL_FREQ_NOT_FOUND	3       //specified freq not found under specified conditions
@@ -64,19 +70,19 @@ typedef	struct _ROM {
 
 //power setup elated definitions
 #define	PARAM_DEFAULT			0   //default power settings (voltage regulator, flash interface)
-#define	PARAM_CPU_PERFORMANCE		1   //setup for maximum CPU performance (higher current, more computation)
+#define	PARAM_CPU_PERFORMANCE	1   //setup for maximum CPU performance (higher current, more computation)
 #define	PARAM_EFFICIENCY		2   //balanced setting (power vs CPU performance)
 #define	PARAM_LOW_CURRENT		3   //lowest active current, lowest CPU performance
 
-#define	PARAM_CMD_CUCCESS		0   //power setting successfully found
+#define	PARAM_CMD_SUCCESS		0   //power setting successfully found
 #define	PARAM_INVALID_FREQ		1   //specified freq out of range (=0 or > 50 MHz)
 #define	PARAM_INVALID_MODE		2   //specified mode not valid (see above for valid)
 
-#define MAX_CLOCK_KHZ_PARAM     72000
+#define MAX_CLOCK_KHZ_PARAM                50000
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  /* __POWER_API_H__ */
+#endif  /* __LPC13UXX_POWER_API_H__ */
 

@@ -93,8 +93,8 @@ along with Lasershark. If not, see <http://www.gnu.org/licenses/>.
 #define LASERSHARK_USB_DATA_BULK_SIZE 64
 #define LASERSHARK_USB_DATA_ISO_SIZE 512
 #define LASERSHARK_USB_SOF_RATE 1000
-unsigned char OUT1Packet[LASERSHARK_USB_CTRL_SIZE]; //User application buffer for receiving and holding OUT packets sent from the host
-unsigned char IN1Packet[LASERSHARK_USB_CTRL_SIZE]; //User application buffer for sending IN packets to the host
+extern unsigned char OUT1Packet[]; //User application buffer for receiving and holding OUT packets sent from the host
+extern unsigned char IN1Packet[]; //User application buffer for sending IN packets to the host
 
 int32_t lasershark_usb_data_packet_size;
 int32_t lasershark_usb_data_packet_samp_count;
@@ -124,8 +124,8 @@ bool lasershark_set_ilda_rate(uint32_t ilda_rate);
 
 __inline uint32_t lasershark_get_empty_sample_count();
 
-__inline void lasershark_process_data(uint32_t cnt);
+__inline void lasershark_process_data(unsigned char* packet, uint32_t cnt);
 
-void TIMER32_1_IRQHandler(void);
+void CT32B1_IRQHandler(void);
 
 #endif /* LASERSHARK_H_ */

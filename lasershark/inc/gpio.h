@@ -1,100 +1,63 @@
-/*****************************************************************************
- *   gpio.h:  Header file for NXP LPC13xx Family Microprocessors
+/****************************************************************************
+ *   $Id:: gpio.h 6172 2011-01-13 18:22:51Z usb00423                        $
+ *   Project: NXP LPC11Uxx software example
  *
- *   Copyright(C) 2008, NXP Semiconductor
- *   All rights reserved.
+ *   Description:
+ *     This file contains definition and prototype for GPIO.
  *
- *   History
- *   2012.10.15  ver 1.1 	Added gpio toggle function <nelsonjm@macpod.net>
- *   2008.09.01  ver 1.00    Preliminary version, first Release
- *   2009.12.09  ver 1.05    Mod to use mask registers for GPIO writes + inlining (.h)
- *
-******************************************************************************/
+ ****************************************************************************
+ * Software that is described herein is for illustrative purposes only
+ * which provides customers with programming information regarding the
+ * products. This software is supplied "AS IS" without any warranties.
+ * NXP Semiconductors assumes no responsibility or liability for the
+ * use of the software, conveys no license or title under any patent,
+ * copyright, or mask work right to the product. NXP Semiconductors
+ * reserves the right to make changes in the software without
+ * notification. NXP Semiconductors also make no representation or
+ * warranty that such application will be suitable for the specified
+ * use without further testing or modification.
+****************************************************************************/
 #ifndef __GPIO_H 
 #define __GPIO_H
 
-#include "LPC13xx.h"
+#define CHANNEL0	0
+#define CHANNEL1	1
+#define CHANNEL2	2
+#define CHANNEL3	3
+#define CHANNEL4	4
+#define CHANNEL5	5
+#define CHANNEL6	6
+#define CHANNEL7	7
 
 #define PORT0		0
 #define PORT1		1
-#define PORT2		2
-#define PORT3		3
 
-void GPIO_IRQHandler(void);
+#define GROUP0		0
+#define GROUP1		1
+
+void FLEX_INT0_IRQHandler(void);
+void FLEX_INT1_IRQHandler(void);
+void FLEX_INT2_IRQHandler(void);
+void FLEX_INT3_IRQHandler(void);
+void FLEX_INT4_IRQHandler(void);
+void FLEX_INT5_IRQHandler(void);
+void FLEX_INT6_IRQHandler(void);
+void FLEX_INT7_IRQHandler(void);
+void GINT0_IRQHandler(void);
+void GINT1_IRQHandler(void);
 void GPIOInit( void );
-void GPIOSetInterrupt( uint32_t portNum, uint32_t bitPosi, uint32_t sense,
-		uint32_t single, uint32_t event );
-void GPIOIntEnable( uint32_t portNum, uint32_t bitPosi );
-void GPIOIntDisable( uint32_t portNum, uint32_t bitPosi );
-uint32_t GPIOIntStatus( uint32_t portNum, uint32_t bitPosi );
-void GPIOIntClear( uint32_t portNum, uint32_t bitPosi );
-
-static LPC_GPIO_TypeDef (* const LPC_GPIO[4]) = { LPC_GPIO0, LPC_GPIO1, LPC_GPIO2, LPC_GPIO3 };
-
-/*****************************************************************************
-** Function name:		GPIOSetValue
-**
-** Descriptions:		Set/clear a bitvalue in a specific bit position
-**						in GPIO portX(X is the port number.)
-**
-** parameters:			port num, bit position, bit value
-** Returned value:		None
-**
-*****************************************************************************/
-static __INLINE void GPIOSetValue( uint32_t portNum, uint32_t bitPosi, uint32_t bitVal )
-{
-	LPC_GPIO[portNum]->MASKED_ACCESS[(1<<bitPosi)] = (bitVal<<bitPosi);
-}
-
-
-/*****************************************************************************
-** Function name:		GPIOGetValue
-**
-** Descriptions:		Set/clear a bitvalue in a specific bit position
-**						in GPIO portX(X is the port number.)
-**
-** parameters:			port num, bit position, bit value
-** Returned value:		None
-**
-*****************************************************************************/
-static __INLINE uint32_t GPIOGetValue( uint32_t portNum, uint32_t bitPosi)
-{
-	return (LPC_GPIO[portNum]->MASKED_ACCESS[(1<<bitPosi)])>>bitPosi;
-}
-
-
-/*****************************************************************************
-** Function name:		GPIOToggleValue
-**
-** Descriptions:		Toggles bitvalue in a specific bit position
-**						in GPIO portX(X is the port number.)
-**
-** parameters:			port num, bit position
-** Returned value:		None
-**
-*****************************************************************************/
-static __INLINE void GPIOToggleValue( uint32_t portNum, uint32_t bitPosi)
-{
-	GPIOSetValue(portNum, bitPosi, ~GPIOGetValue(portNum, bitPosi));
-
-}
-
-/*****************************************************************************
-** Function name:		GPIOSetDir
-**
-** Descriptions:		Set the direction in GPIO port
-**
-** parameters:			port num, bit position, direction (1 out, 0 input)
-** Returned value:		None
-**
-*****************************************************************************/
-static __INLINE void GPIOSetDir( uint32_t portNum, uint32_t bitPosi, uint32_t dir )
-{
-	if(dir)
-		LPC_GPIO[portNum]->DIR |= 1<<bitPosi;
-	else
-		LPC_GPIO[portNum]->DIR &= ~(1<<bitPosi);
-}
+void GPIOSetFlexInterrupt( uint32_t channelNum, uint32_t portNum, uint32_t bitPosi,
+		uint32_t sense, uint32_t event );
+void GPIOFlexIntEnable( uint32_t channelNum, uint32_t event );
+void GPIOFlexIntDisable( uint32_t channelNum, uint32_t event );
+uint32_t GPIOFlexIntStatus( uint32_t channelNum );
+void GPIOFlexIntClear( uint32_t channelNum );
+void GPIOSetGroupedInterrupt( uint32_t groupNum, uint32_t *bitPattern, uint32_t logic,
+		uint32_t sense, uint32_t *eventPattern );
+uint32_t GPIOGetPinValue( uint32_t portNum, uint32_t bitPosi );
+void GPIOSetBitValue( uint32_t portNum, uint32_t bitPosi, uint32_t bitVal );
+void GPIOSetDir( uint32_t portNum, uint32_t bitPosi, uint32_t dir );
+void GPIOToggleValue( uint32_t portNum, uint32_t bitPosi );
 
 #endif /* end __GPIO_H */
 /*****************************************************************************

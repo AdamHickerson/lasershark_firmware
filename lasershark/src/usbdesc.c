@@ -19,9 +19,8 @@ along with Lasershark. If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "type.h"
-#include "usb.h"
-#include "usbcfg.h"
-#include "usbdesc.h"
+#include "app_usbd_cfg.h"
+#include "mw_usbd_desc.h"
 #include "config.h"
 #include "lasershark.h"
 #include "iap.h"

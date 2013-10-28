@@ -9,7 +9,7 @@
  *   2008.07.20  ver 1.00    Preliminary version, first Release
  *
  *****************************************************************************/
-#include "LPC13xx.h"			/* LPC13xx Peripheral Registers */
+#include "LPC13Uxx.h"			/* LPC13xx Peripheral Registers */
 #include "gpio.h"
 #include "ssp.h"
 
@@ -35,16 +35,16 @@ volatile uint32_t interruptRxTimeoutStat = 0;
 void SSP_IRQHandler(void) {
 	uint32_t regValue;
 
-	regValue = LPC_SSP->MIS;
+	regValue = LPC_SSP0->MIS;
 	if (regValue & SSPMIS_RORMIS) /* Receive overrun interrupt */
 	{
 		interruptOverRunStat++;
-		LPC_SSP->ICR = SSPICR_RORIC; /* clear interrupt */
+		LPC_SSP0->ICR = SSPICR_RORIC; /* clear interrupt */
 	}
 	if (regValue & SSPMIS_RTMIS) /* Receive timeout interrupt */
 	{
 		interruptRxTimeoutStat++;
-		LPC_SSP->ICR = SSPICR_RTIC; /* clear interrupt */
+		LPC_SSP0->ICR = SSPICR_RTIC; /* clear interrupt */
 	}
 
 	/* please be aware that, in main and ISR, CurrentRxIndex and CurrentTxIndex
@@ -72,7 +72,7 @@ void SSPInit(void) {
 
 	LPC_SYSCON->PRESETCTRL |= (0x1 << 0);
 	LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 11);
-	LPC_SYSCON->SSPCLKDIV = 0x01;			/* Divided by 1 (PCKL) */
+	LPC_SYSCON->SSP0CLKDIV = 0x01;			/* Divided by 1 (PCKL) */
 	LPC_IOCON->PIO0_8 &= ~0x07; /*  SSP I/O config */
 	LPC_IOCON->PIO0_8 |= 0x01; /* SSP MISO */
 	LPC_IOCON->PIO0_9 &= ~0x07;
@@ -84,11 +84,7 @@ void SSPInit(void) {
 #endif
 
 #if 1
-	/* On HummingBird 1(HB1), SSP CLK can be routed to different pins,
-	 other than JTAG TCK, it's either P2.11 func. 1 or P0.6 func. 2. */
-	LPC_IOCON->SCKLOC = 0x01;
-	LPC_IOCON->PIO2_11 = 0x01;/* P2.11 function 1 is SSP clock, need to combined
-	 with IOCONSCKLOC register setting */
+	LPC_IOCON->PIO1_29 = 0x01; /* SCK0 */
 #else
 	LPC_IOCON->SCKLOC = 0x02;
 	LPC_IOCON->PIO0_6 = 0x02; /* P0.6 function 2 is SSP clock, need to combined
@@ -106,17 +102,17 @@ void SSPInit(void) {
 #endif
 
 	// dss=16bit, frame format = spi, CPOL = 0, cpha = 0, SCR is 0
-	LPC_SSP->CR0 = 0xF << 0 | 0x0 << 4 | 0 << 6 | 1 << 7 | 0x00 << 8;
+	LPC_SSP0->CR0 = 0xF << 0 | 0x0 << 4 | 0 << 6 | 1 << 7 | 0x00 << 8;
 	/* SSPCPSR clock prescale register, master mode, minimum divisor is 0x02 */
-	LPC_SSP->CPSR = 0x2; /* CPSDVSR */
+	LPC_SSP0->CPSR = 0x2; /* CPSDVSR */
 
 	for (i = 0; i < FIFOSIZE; i++)
 	{
-		Dummy = LPC_SSP->DR; /* clear the RxFIFO */
+		Dummy = LPC_SSP0->DR; /* clear the RxFIFO */
 	}
 
 	/* Enable the SSP Interrupt */
-	NVIC_EnableIRQ(SSP_IRQn);
+	NVIC_EnableIRQ(SSP0_IRQn);
 
 	/* Device select as master, SSP Enabled */
 #if LOOPBACK_MODE
@@ -133,12 +129,12 @@ void SSPInit(void) {
 	LPC_SSP->CR1 |= SSPCR1_SSE; /* Enable SSP */
 #else
 	/* Master mode */
-	LPC_SSP->CR1 = SSPCR1_SSE;
+	LPC_SSP0->CR1 = SSPCR1_SSE;
 #endif
 #endif
 	/* Set SSPINMS registers to enable interrupts */
 	/* enable all error related interrupts */
-	LPC_SSP->IMSC = SSPIMSC_RORIM | SSPIMSC_RTIM;
+	LPC_SSP0->IMSC = SSPIMSC_RORIM | SSPIMSC_RTIM;
 	return;
 }
 
@@ -159,17 +155,17 @@ void SSPSend(uint8_t *buf, uint32_t Length) {
 
 	for (i = 0; i < Length; i++) {
 		/* Move on only if NOT busy and TX FIFO not full. */
-		while ((LPC_SSP->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
+		while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
 			;
-		LPC_SSP->DR = *buf;
+		LPC_SSP0->DR = *buf;
 		buf++;
 #if !LOOPBACK_MODE
-		while ((LPC_SSP->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
+		while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
 			;
 		/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
 		 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
 		 is left in the FIFO. */
-		Dummy = LPC_SSP->DR;
+		Dummy = LPC_SSP0->DR;
 #else
 		/* Wait until the Busy bit is cleared. */
 		while ( LPC_SSP->SR & SSPSR_BSY );
@@ -195,17 +191,17 @@ void SSPSend16(uint16_t *buf, uint32_t Length) {
 
 	for (i = 0; i < Length; i++) {
 		/* Move on only if NOT busy and TX FIFO not full. */
-		while ((LPC_SSP->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
+		while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
 			;
-		LPC_SSP->DR = *buf;
+		LPC_SSP0->DR = *buf;
 		buf++;
 #if !LOOPBACK_MODE
-		while ((LPC_SSP->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
+		while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
 			;
 		/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
 		 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
 		 is left in the FIFO. */
-		Dummy = LPC_SSP->DR;
+		Dummy = LPC_SSP0->DR;
 #else
 //		/* Wait until the Busy bit is cleared. */
 //		while ( LPC_SSP->SR & SSPSR_BSY );
@@ -218,14 +214,14 @@ void SSPSendC16(uint16_t c) {
 	uint8_t Dummy = Dummy;
 
 	/* Move on only if NOT busy and TX FIFO not full. */
-	while ((LPC_SSP->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF);
-	LPC_SSP->DR = c;
+	while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF);
+	LPC_SSP0->DR = c;
 #if !LOOPBACK_MODE
-	while ((LPC_SSP->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE);
+	while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE);
 	/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
 	 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
 	 is left in the FIFO. */
-	Dummy = LPC_SSP->DR;
+	Dummy = LPC_SSP0->DR;
 #else
 //	/* Wait until the Busy bit is cleared. */
 //	while ( LPC_SSP->SR & SSPSR_BSY );
@@ -256,15 +252,15 @@ void SSPReceive(uint8_t *buf, uint32_t Length) {
 #if SSP_SLAVE
 		while ( !(LPC_SSP->SR & SSPSR_RNE) );
 #else
-		LPC_SSP->DR = 0xFF;
+		LPC_SSP0->DR = 0xFF;
 		/* Wait until the Busy bit is cleared */
-		while ((LPC_SSP->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
+		while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
 			;
 #endif
 #else
 		while ( !(LPC_SSP->SR & SSPSR_RNE) );
 #endif
-		*buf = LPC_SSP->DR;
+		*buf = LPC_SSP0->DR;
 		buf++;
 
 	}

@@ -21,24 +21,25 @@ This project contains appropriate files for this MCU family
 taken from CMSIS. A full copy of the CMSIS files, together
 with additional information on CMSIS can be found at:
 
-  http://www.onarm.com/
-  http://www.arm.com/
+  http://www.arm.com/cmsis/
 
 Documentation
 ~~~~~~~~~~~~~
 The standard CMSIS documentation can be found within the
 Code Red IDE help system, via:
 
-Help -> Help Contents -> Code Red Product Documentation -> CMSIS
+Help -> Help Contents -> Cortex Microcontroller Software
+                                         Interface Standard
 
-More information on the use of CMSIS within the Code Red IDE
-can be found in the Support area of the Code Red website at
+More information on the use of CMSIS within the 
+LPCXpresso IDE can be found in the LPCXpresso FAQ area of the
+LPCware website at:
 
-  http://www.code-red-tech.com/
+  http://www.lpcware.com/
 
 At the time of writing, the CMSIS FAQ can be found directly
 at:
 
-  http://support.code-red-tech.com/CodeRedWiki/Support4CMSIS
+  http://www.lpcware.com/content/faq/lpcxpresso/cmsis-support
 
 

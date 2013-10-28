@@ -1,126 +1,417 @@
-/*****************************************************************************
- *   gpio.c:  GPIO C file for NXP LPC13xx Family Microprocessors
+/****************************************************************************
+ *   $Id:: gpio.c 6172 2011-01-13 18:22:51Z usb00423                        $
+ *   Project: NXP LPC11Uxx GPIO example
  *
- *   Copyright(C) 2008, NXP Semiconductor
- *   All rights reserved.
+ *   Description:
+ *     This file contains GPIO code example which include GPIO 
+ *     initialization, GPIO interrupt handler, and related APIs for 
+ *     GPIO access.
  *
- *   History
- *   2008.07.20  ver 1.00    Preliminary version, first Release
- *   2009.12.09  ver 1.05    Mod to use mask registers for GPIO writes + inlining (.h)
- *
-*****************************************************************************/
-#include "LPC13xx.h"			/* LPC13xx Peripheral Registers */
+ ****************************************************************************
+ * Software that is described herein is for illustrative purposes only
+ * which provides customers with programming information regarding the
+ * products. This software is supplied "AS IS" without any warranties.
+ * NXP Semiconductors assumes no responsibility or liability for the
+ * use of the software, conveys no license or title under any patent,
+ * copyright, or mask work right to the product. NXP Semiconductors
+ * reserves the right to make changes in the software without
+ * notification. NXP Semiconductors also make no representation or
+ * warranty that such application will be suitable for the specified
+ * use without further testing or modification.
+****************************************************************************/
+#include "LPC13Uxx.h"			/* LPC11Uxx Peripheral Registers */
 #include "gpio.h"
 
-/* ===================
- * CodeRed - Modified file to extract out interrupt handler related code,
- * which is really application project specific.
- * Set TIMER16_GENERIC_INTS to 1 to reenable original code.
- * =================== */
-//#define GPIO_GENERIC_INTS 1
-
-#ifdef GPIO_GENERIC_INTS
-volatile uint32_t gpio0_counter = 0;
-volatile uint32_t gpio1_counter = 0;
-volatile uint32_t gpio2_counter = 0;
-volatile uint32_t gpio3_counter = 0;
-volatile uint32_t p0_1_counter  = 0;
-volatile uint32_t p1_1_counter  = 0;
-volatile uint32_t p2_1_counter  = 0;
-volatile uint32_t p3_1_counter  = 0;
+volatile uint32_t PIN_INT0_counter = 0;
+volatile uint32_t PIN_INT1_counter = 0;
+volatile uint32_t PIN_INT2_counter = 0;
+volatile uint32_t PIN_INT3_counter = 0;
+volatile uint32_t PIN_INT4_counter = 0;
+volatile uint32_t PIN_INT5_counter = 0;
+volatile uint32_t PIN_INT6_counter = 0;
+volatile uint32_t PIN_INT7_counter = 0;
+volatile uint32_t gint0_counter = 0;
+volatile uint32_t gint1_counter = 0;
+volatile uint32_t PIN_INT0_level_counter = 0;
+volatile uint32_t PIN_INT0_rising_edge_counter = 0;
+volatile uint32_t PIN_INT0_falling_edge_counter = 0;
+volatile uint32_t PIN_INT1_level_counter = 0;
+volatile uint32_t PIN_INT1_rising_edge_counter = 0;
+volatile uint32_t PIN_INT1_falling_edge_counter = 0;
+volatile uint32_t PIN_INT2_level_counter = 0;
+volatile uint32_t PIN_INT2_rising_edge_counter = 0;
+volatile uint32_t PIN_INT2_falling_edge_counter = 0;
+volatile uint32_t PIN_INT3_level_counter = 0;
+volatile uint32_t PIN_INT3_rising_edge_counter = 0;
+volatile uint32_t PIN_INT3_falling_edge_counter = 0;
+volatile uint32_t PIN_INT4_level_counter = 0;
+volatile uint32_t PIN_INT4_rising_edge_counter = 0;
+volatile uint32_t PIN_INT4_falling_edge_counter = 0;
+volatile uint32_t PIN_INT5_level_counter = 0;
+volatile uint32_t PIN_INT5_rising_edge_counter = 0;
+volatile uint32_t PIN_INT5_falling_edge_counter = 0;
+volatile uint32_t PIN_INT6_level_counter = 0;
+volatile uint32_t PIN_INT6_rising_edge_counter = 0;
+volatile uint32_t PIN_INT6_falling_edge_counter = 0;
+volatile uint32_t PIN_INT7_level_counter = 0;
+volatile uint32_t PIN_INT7_rising_edge_counter = 0;
+volatile uint32_t PIN_INT7_falling_edge_counter = 0;
+volatile uint32_t gint0_level_counter = 0;
+volatile uint32_t gint0_edge_counter = 0;
+volatile uint32_t gint1_level_counter = 0;
+volatile uint32_t gint1_edge_counter = 0;
 
 /*****************************************************************************
-** Function name:		PIOINT0_IRQHandler
+** Function name:		PIN_INT0_IRQHandler
 **
-** Descriptions:		Use one GPIO pin(port0 pin1) as interrupt source
+** Descriptions:		Use one GPIO pin as interrupt source
 **
 ** parameters:			None
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void PIOINT0_IRQHandler(void)
+void PIN_INT0_IRQHandler(void)
 {
-  uint32_t regVal;
-
-  gpio0_counter++;
-  regVal = GPIOIntStatus( PORT0, 1 );
-  if ( regVal )
+  PIN_INT0_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<0) )
   {
-	p0_1_counter++;
-	GPIOIntClear( PORT0, 1 );
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<0) )
+	{
+	  PIN_INT0_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<0) )
+	  {
+		PIN_INT0_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<0;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<0) )
+	  {
+		PIN_INT0_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<0;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<0;
+	}
   }		
   return;
 }
 
 /*****************************************************************************
-** Function name:		PIOINT1_IRQHandler
+** Function name:		PIN_INT1_IRQHandler
 **
-** Descriptions:		Use one GPIO pin(port1 pin1) as interrupt source
+** Descriptions:		Use one GPIO pin as interrupt source
 **
 ** parameters:			None
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void PIOINT1_IRQHandler(void)
+void PIN_INT1_IRQHandler(void)
 {
-  uint32_t regVal;
-
-  gpio1_counter++;
-  regVal = GPIOIntStatus( PORT1, 1 );
-  if ( regVal )
+  PIN_INT1_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<1) )
   {
-	p1_1_counter++;
-	GPIOIntClear( PORT1, 1 );
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<1) )
+	{
+	  PIN_INT1_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<1) )
+	  {
+		PIN_INT1_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<1;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<1) )
+	  {
+		PIN_INT1_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<1;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<1;
+	}
   }		
   return;
 }
 
 /*****************************************************************************
-** Function name:		PIOINT2_IRQHandler
+** Function name:		PIN_INT2_IRQHandler
 **
-** Descriptions:		Use one GPIO pin(port2 pin1) as interrupt source
+** Descriptions:		Use one GPIO pin as interrupt source
 **
 ** parameters:			None
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void PIOINT2_IRQHandler(void)
+void PIN_INT2_IRQHandler(void)
 {
-  uint32_t regVal;
-
-  gpio2_counter++;
-  regVal = GPIOIntStatus( PORT2, 1 );
-  if ( regVal )
+  PIN_INT2_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<2) )
   {
-	p2_1_counter++;
-	GPIOIntClear( PORT2, 1 );
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<2) )
+	{
+	  PIN_INT2_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<2) )
+	  {
+		PIN_INT2_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<2;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<2) )
+	  {
+		PIN_INT2_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<2;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<2;
+	}
   }		
   return;
 }
 
 /*****************************************************************************
-** Function name:		PIOINT3_IRQHandler
+** Function name:		PIN_INT3_IRQHandler
 **
-** Descriptions:		Use one GPIO pin(port3 pin1) as interrupt source
+** Descriptions:		Use one GPIO pin as interrupt source
 **
 ** parameters:			None
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void PIOINT3_IRQHandler(void)
+void PIN_INT3_IRQHandler(void)
 {
-  uint32_t regVal;
-
-  gpio3_counter++;
-  regVal = GPIOIntStatus( PORT3, 1 );
-  if ( regVal )
+  PIN_INT3_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<3) )
   {
-	p3_1_counter++;
-	GPIOIntClear( PORT3, 1 );
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<3) )
+	{
+	  PIN_INT3_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<3) )
+	  {
+		PIN_INT3_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<3;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<3) )
+	  {
+		PIN_INT3_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<3;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<3;
+	}
   }		
   return;
 }
-#endif //GPIO_GENERIC_INTS
+
+/*****************************************************************************
+** Function name:		PIN_INT4_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void PIN_INT4_IRQHandler(void)
+{
+  PIN_INT4_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<4) )
+  {
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<4) )
+	{
+	  PIN_INT4_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<4) )
+	  {
+		PIN_INT4_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<4;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<4) )
+	  {
+		PIN_INT4_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<4;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<4;
+	}
+  }		
+  return;
+}
+
+/*****************************************************************************
+** Function name:		PIN_INT5_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void PIN_INT5_IRQHandler(void)
+{
+  PIN_INT5_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<5) )
+  {
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<5) )
+	{
+	  PIN_INT5_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<5) )
+	  {
+		PIN_INT5_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<5;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<5) )
+	  {
+		PIN_INT5_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<5;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<5;
+	}
+  }		
+  return;
+}
+
+/*****************************************************************************
+** Function name:		PIN_INT6_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void PIN_INT6_IRQHandler(void)
+{
+  PIN_INT6_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<6) )
+  {
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<6) )
+	{
+	  PIN_INT6_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<6) )
+	  {
+		PIN_INT6_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<6;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<6) )
+	  {
+		PIN_INT6_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<6;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<6;
+	}
+  }		
+  return;
+}
+
+/*****************************************************************************
+** Function name:		PIN_INT7_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void PIN_INT7_IRQHandler(void)
+{
+  PIN_INT7_counter++;
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<7) )
+  {
+	if ( LPC_GPIO_PIN_INT->ISEL & (0x1<<7) )
+	{
+	  PIN_INT7_level_counter++;
+	}
+	else
+	{
+	  if ( LPC_GPIO_PIN_INT->RISE & (0x1<<7) )
+	  {
+		PIN_INT7_rising_edge_counter++;
+		LPC_GPIO_PIN_INT->RISE = 0x1<<7;
+	  }
+	  else if ( LPC_GPIO_PIN_INT->FALL & (0x1<<7) )
+	  {
+		PIN_INT7_falling_edge_counter++;
+		LPC_GPIO_PIN_INT->FALL = 0x1<<7;
+	  }
+	  LPC_GPIO_PIN_INT->IST = 0x1<<7;
+	}
+  }		
+  return;
+}
+
+/*****************************************************************************
+** Function name:		GINT0_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void GINT0_IRQHandler(void)
+{
+  gint0_counter++;
+  if ( LPC_GPIO_GROUP_INT0->CTRL & 0x1 )
+  {
+	if ( LPC_GPIO_GROUP_INT0->CTRL & (0x1<<4) )
+	{
+	  gint0_level_counter++;
+	}
+	else
+	{
+	  gint0_edge_counter++;
+	}
+	LPC_GPIO_GROUP_INT0->CTRL |= 0x1;
+  }		
+  return;
+}
+
+/*****************************************************************************
+** Function name:		GINT1_IRQHandler
+**
+** Descriptions:		Use one GPIO pin as interrupt source
+**
+** parameters:			None
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void GINT1_IRQHandler(void)
+{
+  gint1_counter++;
+  if ( LPC_GPIO_GROUP_INT1->CTRL & 0x1 )
+  {
+	if ( LPC_GPIO_GROUP_INT1->CTRL & (0x1<<4) )
+	{
+	  gint1_level_counter++;
+	}
+	else
+	{
+	  gint1_edge_counter++;
+	}
+	LPC_GPIO_GROUP_INT1->CTRL |= 0x1;
+  }		
+  return;
+}
 
 /*****************************************************************************
 ** Function name:		GPIOInit
@@ -129,6 +420,7 @@ void PIOINT3_IRQHandler(void)
 **						GPIO interrupt handler
 **
 ** parameters:			None
+** 						
 ** Returned value:		true or false, return false if the VIC table
 **						is full and GPIO interrupt handler can be
 **						installed.
@@ -139,236 +431,389 @@ void GPIOInit( void )
   /* Enable AHB clock to the GPIO domain. */
   LPC_SYSCON->SYSAHBCLKCTRL |= (1<<6);
 
-#ifdef __JTAG_DISABLED  
-  LPC_IOCON->JTAG_TDO_PIO1_1  &= ~0x07;
-  LPC_IOCON->JTAG_TDO_PIO1_1  |= 0x01;
-#endif
+  /* Enable AHB clock to the FlexInt, GroupedInt domain. */
+  LPC_SYSCON->SYSAHBCLKCTRL |= ((1<<19) | (1<<23) | (1<<24));
 
-  /* Set up NVIC when I/O pins are configured as external interrupts. */
-  NVIC_EnableIRQ(EINT0_IRQn);
-  NVIC_EnableIRQ(EINT1_IRQn);
-  NVIC_EnableIRQ(EINT2_IRQn);
-  NVIC_EnableIRQ(EINT3_IRQn);
   return;
 }
 
 /*****************************************************************************
-** Function name:		GPIOSetInterrupt
+** Function name:		GPIOSetFlexInterrupt
 **
 ** Descriptions:		Set interrupt sense, event, etc.
-**						edge or level, 0 is edge, 1 is level
-**						single or double edge, 0 is single, 1 is double 
-**						active high or low, etc.
+**						sense: edge or level, 0 is edge, 1 is level 
+**						event/polarity: 0 is active low/falling, 1 is high/rising.
 **
-** parameters:			port num, bit position, sense, single/doube, polarity
+** parameters:			channel #, port #, bit position, sense, event(polarity)
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void GPIOSetInterrupt( uint32_t portNum, uint32_t bitPosi, uint32_t sense,
-			uint32_t single, uint32_t event )
+void GPIOSetFlexInterrupt( uint32_t channelNum, uint32_t portNum, uint32_t bitPosi,
+		uint32_t sense, uint32_t event )
 {
-  switch ( portNum )
+  switch ( channelNum )
   {
-	case PORT0:
-	  if ( sense == 0 )
+	case CHANNEL0:
+	  if ( portNum )
 	  {
-		LPC_GPIO0->IS &= ~(0x1<<bitPosi);
-		/* single or double only applies when sense is 0(edge trigger). */
-		if ( single == 0 )
-		  LPC_GPIO0->IBE &= ~(0x1<<bitPosi);
-		else
-		  LPC_GPIO0->IBE |= (0x1<<bitPosi);
+		LPC_SYSCON->PINSEL[0] = bitPosi + 24;
 	  }
 	  else
-	  	LPC_GPIO0->IS |= (0x1<<bitPosi);
-	  if ( event == 0 )
-		LPC_GPIO0->IEV &= ~(0x1<<bitPosi);
-	  else
-		LPC_GPIO0->IEV |= (0x1<<bitPosi);
+	  {
+		LPC_SYSCON->PINSEL[0] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT0_IRQn);
 	break;
- 	case PORT1:
-	  if ( sense == 0 )
+	case CHANNEL1:
+	  if ( portNum )
 	  {
-		LPC_GPIO1->IS &= ~(0x1<<bitPosi);
-		/* single or double only applies when sense is 0(edge trigger). */
-		if ( single == 0 )
-		  LPC_GPIO1->IBE &= ~(0x1<<bitPosi);
-		else
-		  LPC_GPIO1->IBE |= (0x1<<bitPosi);
+		LPC_SYSCON->PINSEL[1] = bitPosi + 24;
 	  }
 	  else
-	  	LPC_GPIO1->IS |= (0x1<<bitPosi);
-	  if ( event == 0 )
-		LPC_GPIO1->IEV &= ~(0x1<<bitPosi);
-	  else
-		LPC_GPIO1->IEV |= (0x1<<bitPosi);  
+	  {
+		LPC_SYSCON->PINSEL[1] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT1_IRQn);
 	break;
-	case PORT2:
-	  if ( sense == 0 )
+	case CHANNEL2:
+	  if ( portNum )
 	  {
-		LPC_GPIO2->IS &= ~(0x1<<bitPosi);
-		/* single or double only applies when sense is 0(edge trigger). */
-		if ( single == 0 )
-		  LPC_GPIO2->IBE &= ~(0x1<<bitPosi);
-		else
-		  LPC_GPIO2->IBE |= (0x1<<bitPosi);
+		LPC_SYSCON->PINSEL[2] = bitPosi + 24;
 	  }
 	  else
-	  	LPC_GPIO2->IS |= (0x1<<bitPosi);
-	  if ( event == 0 )
-		LPC_GPIO2->IEV &= ~(0x1<<bitPosi);
-	  else
-		LPC_GPIO2->IEV |= (0x1<<bitPosi);  
+	  {
+		LPC_SYSCON->PINSEL[2] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT2_IRQn);
 	break;
-	case PORT3:
-	  if ( sense == 0 )
+	case CHANNEL3:
+	  if ( portNum )
 	  {
-		LPC_GPIO3->IS &= ~(0x1<<bitPosi);
-		/* single or double only applies when sense is 0(edge trigger). */
-		if ( single == 0 )
-		  LPC_GPIO3->IBE &= ~(0x1<<bitPosi);
-		else
-		  LPC_GPIO3->IBE |= (0x1<<bitPosi);
+		LPC_SYSCON->PINSEL[3] = bitPosi + 24;
 	  }
 	  else
-	  	LPC_GPIO3->IS |= (0x1<<bitPosi);
-	  if ( event == 0 )
-		LPC_GPIO3->IEV &= ~(0x1<<bitPosi);
+	  {
+		LPC_SYSCON->PINSEL[3] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT3_IRQn);
+	break;
+	case CHANNEL4:
+	  if ( portNum )
+	  {
+		LPC_SYSCON->PINSEL[4] = bitPosi + 24;
+	  }
 	  else
-		LPC_GPIO3->IEV |= (0x1<<bitPosi);	  
+	  {
+		LPC_SYSCON->PINSEL[4] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT4_IRQn);
+	break;
+	case CHANNEL5:
+	  if ( portNum )
+	  {
+		LPC_SYSCON->PINSEL[5] = bitPosi + 24;
+	  }
+	  else
+	  {
+		LPC_SYSCON->PINSEL[5] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT5_IRQn);
+	break;
+	case CHANNEL6:
+	  if ( portNum )
+	  {
+		LPC_SYSCON->PINSEL[6] = bitPosi + 24;
+	  }
+	  else
+	  {
+		LPC_SYSCON->PINSEL[6] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT6_IRQn);
+	break;
+	case CHANNEL7:
+	  if ( portNum )
+	  {
+		LPC_SYSCON->PINSEL[7] = bitPosi + 24;
+	  }
+	  else
+	  {
+		LPC_SYSCON->PINSEL[7] = bitPosi;
+	  }
+	  NVIC_EnableIRQ(PIN_INT7_IRQn);
 	break;
 	default:
 	  break;
+  }
+  if ( sense == 0 )
+  {
+	LPC_GPIO_PIN_INT->ISEL &= ~(0x1<<channelNum);	/* Edge trigger */
+	if ( event == 0 )
+	{
+	  LPC_GPIO_PIN_INT->IENF |= (0x1<<channelNum);	/* faling edge */
+	}
+	else
+	{
+	  LPC_GPIO_PIN_INT->IENR |= (0x1<<channelNum);	/* Rising edge */
+	}
+  }
+  else
+  {
+	LPC_GPIO_PIN_INT->ISEL |= (0x1<<channelNum);	/* Level trigger. */
+	LPC_GPIO_PIN_INT->IENR |= (0x1<<channelNum);	/* Level enable */
+	if ( event == 0 )
+	{
+	  LPC_GPIO_PIN_INT->IENF &= ~(0x1<<channelNum);	/* active-low */
+	}
+	else
+	{
+	  LPC_GPIO_PIN_INT->IENF |= (0x1<<channelNum);	/* active-high */
+	}
+  }
+
+  return;
+}
+
+/*****************************************************************************
+** Function name:		GPIOFlexIntEnable
+**
+** Descriptions:		Enable Interrupt
+**
+** parameters:			channel num, event(0 is falling edge, 1 is rising edge)
+** Returned value:		None
+** 
+*****************************************************************************/
+void GPIOFlexIntEnable( uint32_t channelNum, uint32_t event )
+{
+  if ( !( LPC_GPIO_PIN_INT->ISEL & (0x1<<channelNum) ) )
+  {
+	if ( event == 0 )
+	{
+	  LPC_GPIO_PIN_INT->SIENF |= (0x1<<channelNum);	/* faling edge */
+	}
+	else
+	{
+	  LPC_GPIO_PIN_INT->SIENR |= (0x1<<channelNum);	/* Rising edge */
+	}
+  }
+  else
+  {
+	LPC_GPIO_PIN_INT->SIENR |= (0x1<<channelNum);	/* Level */
   }
   return;
 }
 
 /*****************************************************************************
-** Function name:		GPIOIntEnable
+** Function name:		GPIOFlexIntDisable
 **
-** Descriptions:		Enable Interrupt Mask for a port pin.
+** Descriptions:		Disable Interrupt
 **
-** parameters:			port num, bit position
+** parameters:			channel num, event(0 is falling edge, 1 is rising edge)
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void GPIOIntEnable( uint32_t portNum, uint32_t bitPosi )
+void GPIOFlexIntDisable( uint32_t channelNum, uint32_t event )
 {
-  switch ( portNum )
+  if ( !( LPC_GPIO_PIN_INT->ISEL & (0x1<<channelNum) ) )
   {
-	case PORT0:
-	  LPC_GPIO0->IE |= (0x1<<bitPosi); 
-	break;
- 	case PORT1:
-	  LPC_GPIO1->IE |= (0x1<<bitPosi);	
-	break;
-	case PORT2:
-	  LPC_GPIO2->IE |= (0x1<<bitPosi);	    
-	break;
-	case PORT3:
-	  LPC_GPIO3->IE |= (0x1<<bitPosi);	    
-	break;
-	default:
-	  break;
+	if ( event == 0 )
+	{
+	  LPC_GPIO_PIN_INT->CIENF |= (0x1<<channelNum);	/* faling edge */
+	}
+	else
+	{
+	  LPC_GPIO_PIN_INT->CIENR |= (0x1<<channelNum);	/* Rising edge */
+	}
+  }
+  else
+  {
+	LPC_GPIO_PIN_INT->CIENR |= (0x1<<channelNum);	/* Level */
   }
   return;
 }
 
 /*****************************************************************************
-** Function name:		GPIOIntDisable
+** Function name:		GPIOFlexIntStatus
 **
-** Descriptions:		Disable Interrupt Mask for a port pin.
+** Descriptions:		Get Interrupt status
 **
-** parameters:			port num, bit position
+** parameters:			channel num
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-void GPIOIntDisable( uint32_t portNum, uint32_t bitPosi )
+uint32_t GPIOFlexIntStatus( uint32_t channelNum )
 {
-  switch ( portNum )
+  if ( LPC_GPIO_PIN_INT->IST & (0x1<<channelNum) )
   {
-	case PORT0:
-	  LPC_GPIO0->IE &= ~(0x1<<bitPosi); 
-	break;
- 	case PORT1:
-	  LPC_GPIO1->IE &= ~(0x1<<bitPosi);	
-	break;
-	case PORT2:
-	  LPC_GPIO2->IE &= ~(0x1<<bitPosi);	    
-	break;
-	case PORT3:
-	  LPC_GPIO3->IE &= ~(0x1<<bitPosi);	    
-	break;
-	default:
-	  break;
+	return( 1 );
+  }
+  else
+  {
+	return( 0 );
+  }
+}
+
+/*****************************************************************************
+** Function name:		GPIOFlexIntClear
+**
+** Descriptions:		Clear Interrupt
+**
+** parameters:			channel num
+** 						
+** Returned value:		None
+** 
+*****************************************************************************/
+void GPIOFlexIntClear( uint32_t channelNum )
+{
+  if ( !( LPC_GPIO_PIN_INT->ISEL & (0x1<<channelNum) ) )
+  {
+	LPC_GPIO_PIN_INT->IST = (1<<channelNum);
   }
   return;
 }
 
 /*****************************************************************************
-** Function name:		GPIOIntStatus
+** Function name:		GPIOSetGroupedInterrupt
 **
-** Descriptions:		Get Interrupt status for a port pin.
+** Descriptions:		Set interrupt logic, sense, eventPattern, etc.
+**						logic: AND or OR, 0 is OR, 1 is AND 
+**						sensePattern: edge or level, 0 is edge, 1 is level 
+**						event/polarity: 0 is active low/falling, 1 is high/rising.
 **
-** parameters:			port num, bit position
+** parameters:			group #, bit pattern, logic, sense, event(polarity) pattern
+** 						
 ** Returned value:		None
 ** 
 *****************************************************************************/
-uint32_t GPIOIntStatus( uint32_t portNum, uint32_t bitPosi )
+void GPIOSetGroupedInterrupt( uint32_t groupNum, uint32_t *bitPattern, uint32_t logic,
+		uint32_t sense, uint32_t *eventPattern )
 {
-  uint32_t regVal = 0;
-
-  switch ( portNum )
+  switch ( groupNum )
   {
-	case PORT0:
-	  if ( LPC_GPIO0->MIS & (0x1<<bitPosi) )
-		regVal = 1;
+	case GROUP0:
+	  if ( sense == 0 )
+	  {
+		LPC_GPIO_GROUP_INT0->CTRL &= ~(0x1<<2);	/* Edge trigger */
+	  }
+	  else
+	  {
+		LPC_GPIO_GROUP_INT0->CTRL |= (0x1<<2);	/* Level trigger. */
+	  }
+	  LPC_GPIO_GROUP_INT0->CTRL |= (logic<<1);
+	  LPC_GPIO_GROUP_INT0->PORT_POL[0] = *((uint32_t *)(eventPattern + 0));
+	  LPC_GPIO_GROUP_INT0->PORT_POL[1] = *((uint32_t *)(eventPattern + 1));
+	  LPC_GPIO_GROUP_INT0->PORT_ENA[0] = *((uint32_t *)(bitPattern + 0));
+	  LPC_GPIO_GROUP_INT0->PORT_ENA[1] = *((uint32_t *)(bitPattern + 1));
+      /* as soon as enabled, an edge may be generated       */
+	  /* clear interrupt flag and NVIC pending interrupt to */
+	  /* workaround the potential edge generated as enabled */
+	  LPC_GPIO_GROUP_INT0->CTRL |= (1<<0);
+	  NVIC_ClearPendingIRQ(GINT0_IRQn);
+	  NVIC_EnableIRQ(GINT0_IRQn);
 	break;
- 	case PORT1:
-	  if ( LPC_GPIO1->MIS & (0x1<<bitPosi) )
-		regVal = 1;	
-	break;
-	case PORT2:
-	  if ( LPC_GPIO2->MIS & (0x1<<bitPosi) )
-		regVal = 1;		    
-	break;
-	case PORT3:
-	  if ( LPC_GPIO3->MIS & (0x1<<bitPosi) )
-		regVal = 1;		    
+	case GROUP1:
+	  if ( sense == 0 )
+	  {
+		LPC_GPIO_GROUP_INT1->CTRL &= ~(0x1<<2);	/* Edge trigger */
+	  }
+	  else
+	  {
+		LPC_GPIO_GROUP_INT1->CTRL |= (0x1<<2);	/* Level trigger. */
+	  }
+	  LPC_GPIO_GROUP_INT1->CTRL |= (logic<<1);
+	  LPC_GPIO_GROUP_INT1->PORT_POL[0] = *((uint32_t *)(eventPattern + 0));
+	  LPC_GPIO_GROUP_INT1->PORT_POL[1] = *((uint32_t *)(eventPattern + 1));
+	  LPC_GPIO_GROUP_INT1->PORT_ENA[0] = *((uint32_t *)(bitPattern + 0));
+	  LPC_GPIO_GROUP_INT1->PORT_ENA[1] = *((uint32_t *)(bitPattern + 1));
+      /* as soon as enabled, an edge may be generated       */
+	  /* clear interrupt flag and NVIC pending interrupt to */
+	  /* workaround the potential edge generated as enabled */
+	  LPC_GPIO_GROUP_INT1->CTRL |= (1<<0);
+	  NVIC_ClearPendingIRQ(GINT1_IRQn);
+	  NVIC_EnableIRQ(GINT1_IRQn);
 	break;
 	default:
 	  break;
   }
-  return ( regVal );
+
+  return;
 }
 
 /*****************************************************************************
-** Function name:		GPIOIntClear
+** Function name:		GPIOGetPinValue
 **
-** Descriptions:		Clear Interrupt for a port pin.
+** Descriptions:		Read Current state of port pin, PIN register value
 **
 ** parameters:			port num, bit position
 ** Returned value:		None
-** 
+**
 *****************************************************************************/
-void GPIOIntClear( uint32_t portNum, uint32_t bitPosi )
+uint32_t GPIOGetPinValue( uint32_t portNum, uint32_t bitPosi )
 {
-  switch ( portNum )
+  uint32_t regVal = 0;	
+
+  if( bitPosi < 0x20 )
+  {	
+	if ( LPC_GPIO->PIN[portNum] & (0x1<<bitPosi) )
+	{
+	  regVal = 1;
+	}
+  }
+  else if( bitPosi == 0xFF )
   {
-	case PORT0:
-	  LPC_GPIO0->IC |= (0x1<<bitPosi); 
-	break;
- 	case PORT1:
-	  LPC_GPIO1->IC |= (0x1<<bitPosi);	
-	break;
-	case PORT2:
-	  LPC_GPIO2->IC |= (0x1<<bitPosi);	    
-	break;
-	case PORT3:
-	  LPC_GPIO3->IC |= (0x1<<bitPosi);	    
-	break;
-	default:
-	  break;
+	regVal = LPC_GPIO->PIN[portNum];
+  }
+  return ( regVal );		
+}
+
+/*****************************************************************************
+** Function name:		GPIOSetBitValue
+**
+** Descriptions:		Set/clear a bit in a specific position
+**
+** parameters:			port num, bit position, bit value
+** 						
+** Returned value:		None
+**
+*****************************************************************************/
+void GPIOSetBitValue( uint32_t portNum, uint32_t bitPosi, uint32_t bitVal )
+{
+  if ( bitVal )
+  {
+	LPC_GPIO->SET[portNum] = 1<<bitPosi;
+  }
+  else
+  {
+	LPC_GPIO->CLR[portNum] = 1<<bitPosi;
+  }
+  return;
+}
+
+void GPIOToggleValue( uint32_t portNum, uint32_t bitPosi ){
+  LPC_GPIO->NOT[portNum] = 1;
+}
+
+/*****************************************************************************
+** Function name:		GPIOSetDir
+**
+** Descriptions:		Set the direction in GPIO port
+**
+** parameters:			portNum, bit position, direction (1 out, 0 input)
+** 						
+** Returned value:		None
+**
+*****************************************************************************/
+void GPIOSetDir( uint32_t portNum, uint32_t bitPosi, uint32_t dir )
+{
+  if( dir )
+  {
+	LPC_GPIO->DIR[portNum] |= (1<<bitPosi);
+  }
+  else
+  {
+	LPC_GPIO->DIR[portNum] &= ~(1<<bitPosi);
   }
   return;
 }

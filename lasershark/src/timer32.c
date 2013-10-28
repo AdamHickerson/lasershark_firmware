@@ -8,7 +8,7 @@
  *   2008.08.20  ver 1.00    Preliminary version, first Release
  *
 ******************************************************************************/
-#include "LPC13xx.h"
+#include "LPC13Uxx.h"
 #include "timer32.h"
 
 /* ===================
@@ -40,28 +40,28 @@ void delay32Ms(uint8_t timer_num, uint32_t delayInMs)
   if (timer_num == 0)
   {
     /* setup timer #0 for delay */
-    LPC_TMR32B0->TCR = 0x02;		/* reset timer */
-    LPC_TMR32B0->PR  = 0x00;		/* set prescaler to zero */
-    LPC_TMR32B0->MR0 = delayInMs * ((SystemFrequency/LPC_SYSCON->SYSAHBCLKDIV) / 1000);
-    LPC_TMR32B0->IR  = 0xff;		/* reset all interrrupts */
-    LPC_TMR32B0->MCR = 0x04;		/* stop timer on match */
-    LPC_TMR32B0->TCR = 0x01;		/* start timer */
+	LPC_CT32B0->TCR = 0x02;		/* reset timer */
+	LPC_CT32B0->PR  = 0x00;		/* set prescaler to zero */
+	LPC_CT32B0->MR0 = delayInMs * ((SystemFrequency/LPC_SYSCON->SYSAHBCLKDIV) / 1000);
+	LPC_CT32B0->IR  = 0xff;		/* reset all interrrupts */
+	LPC_CT32B0->MCR = 0x04;		/* stop timer on match */
+	LPC_CT32B0->TCR = 0x01;		/* start timer */
   
     /* wait until delay time has elapsed */
-    while (LPC_TMR32B0->TCR & 0x01);
+    while (LPC_CT32B0->TCR & 0x01);
   }
   else if (timer_num == 1)
   {
     /* setup timer #1 for delay */
-    LPC_TMR32B1->TCR = 0x02;		/* reset timer */
-    LPC_TMR32B1->PR  = 0x00;		/* set prescaler to zero */
-    LPC_TMR32B1->MR0 = delayInMs * ((SystemFrequency/LPC_SYSCON->SYSAHBCLKDIV) / 1000);
-    LPC_TMR32B1->IR  = 0xff;		/* reset all interrrupts */
-    LPC_TMR32B1->MCR = 0x04;		/* stop timer on match */
-    LPC_TMR32B1->TCR = 0x01;		/* start timer */
+	LPC_CT32B1->TCR = 0x02;		/* reset timer */
+	LPC_CT32B1->PR  = 0x00;		/* set prescaler to zero */
+	LPC_CT32B1->MR0 = delayInMs * ((SystemFrequency/LPC_SYSCON->SYSAHBCLKDIV) / 1000);
+	LPC_CT32B1->IR  = 0xff;		/* reset all interrrupts */
+	LPC_CT32B1->MCR = 0x04;		/* stop timer on match */
+	LPC_CT32B1->TCR = 0x01;		/* start timer */
   
     /* wait until delay time has elapsed */
-    while (LPC_TMR32B1->TCR & 0x01);
+    while (LPC_CT32B1->TCR & 0x01);
   }
   return;
 }
@@ -78,9 +78,9 @@ void delay32Ms(uint8_t timer_num, uint32_t delayInMs)
 ** Returned value:		None
 ** 
 ******************************************************************************/
-void TIMER32_0_IRQHandler(void)
+void CT32B0_IRQHandler(void)
 {  
-  LPC_TMR32B0->IR = 1;			/* clear interrupt flag */
+  LPC_CT32B0->IR = 1;			/* clear interrupt flag */
   timer32_0_counter++;
   return;
 }
@@ -118,11 +118,11 @@ void enable_timer32(uint8_t timer_num)
 {
   if ( timer_num == 0 )
   {
-    LPC_TMR32B0->TCR = 1;
+	LPC_CT32B0->TCR = 1;
   }
   else
   {
-    LPC_TMR32B1->TCR = 1;
+	LPC_CT32B1->TCR = 1;
   }
   return;
 }
@@ -140,11 +140,11 @@ void disable_timer32(uint8_t timer_num)
 {
   if ( timer_num == 0 )
   {
-    LPC_TMR32B0->TCR = 0;
+	LPC_CT32B0->TCR = 0;
   }
   else
   {
-    LPC_TMR32B1->TCR = 0;
+	LPC_CT32B1->TCR = 0;
   }
   return;
 }
@@ -164,15 +164,15 @@ void reset_timer32(uint8_t timer_num)
 
   if ( timer_num == 0 )
   {
-    regVal = LPC_TMR32B0->TCR;
+    regVal = LPC_CT32B0->TCR;
     regVal |= 0x02;
-    LPC_TMR32B0->TCR = regVal;
+    LPC_CT32B0->TCR = regVal;
   }
   else
   {
-    regVal = LPC_TMR32B1->TCR;
+    regVal = LPC_CT32B1->TCR;
     regVal |= 0x02;
-    LPC_TMR32B1->TCR = regVal;
+    LPC_CT32B1->TCR = regVal;
   }
   return;
 }
@@ -209,13 +209,13 @@ void init_timer32(uint8_t timer_num, uint32_t TimerInterval)
 #ifdef TIMER32_0_DEFAULT_HANDLER
     timer32_0_counter = 0;
 #endif //TIMER32_0_DEFAULT_HANDLER
-    LPC_TMR32B0->MR0 = TimerInterval;
+    LPC_CT32B0->MR0 = TimerInterval;
 //	LPC_TMR32B0->EMR &= ~(0xFF<<4);
 //	LPC_TMR32B0->EMR |= (0x03<<4);	/* MR0 Toggle */
-    LPC_TMR32B0->MCR = 3;			/* Interrupt and Reset on MR0 */
+    LPC_CT32B0->MCR = 3;			/* Interrupt and Reset on MR0 */
 
     /* Enable the TIMER0 Interrupt */
-    NVIC_EnableIRQ(TIMER_32_0_IRQn);
+    NVIC_EnableIRQ(CT32B0_IRQn);
   }
   else if ( timer_num == 1 )
   {
@@ -239,13 +239,13 @@ void init_timer32(uint8_t timer_num, uint32_t TimerInterval)
     timer32_1_counter = 0;
 #endif //TIMER32_1_DEFAULT_HANDLER
 
-    LPC_TMR32B1->MR0 = TimerInterval;
+    LPC_CT32B1->MR0 = TimerInterval;
 //	LPC_TMR32B1->EMR &= ~(0xFF<<4);
 //	LPC_TMR32B1->EMR |= (0x03<<10);	/* MR3 Toggle */
-    LPC_TMR32B1->MCR = 3;			/* Interrupt and Reset on MR0 */
+    LPC_CT32B1->MCR = 3;			/* Interrupt and Reset on MR0 */
 
     /* Enable the TIMER1 Interrupt */
-    NVIC_EnableIRQ(TIMER_32_1_IRQn);
+    NVIC_EnableIRQ(CT32B1_IRQn);
   }
   return;
 }
@@ -255,17 +255,17 @@ void update_timer32(int8_t timer_num, uint32_t TimerInterval)
 {
 	  if ( timer_num == 0 )
 	  {
-		    LPC_TMR32B0->MR0 = TimerInterval;
+		    LPC_CT32B0->MR0 = TimerInterval;
 
-		    if (LPC_TMR32B0->TC >= TimerInterval)
-		    	LPC_TMR32B0->TC = TimerInterval;
+		    if (LPC_CT32B0->TC >= TimerInterval)
+		    	LPC_CT32B0->TC = TimerInterval;
 	  }
 	  else if ( timer_num == 1 )
 	  {
-		    LPC_TMR32B1->MR0 = TimerInterval;
+		    LPC_CT32B1->MR0 = TimerInterval;
 
-		    if (LPC_TMR32B1->TC >= TimerInterval)
-		    	LPC_TMR32B1->TC = TimerInterval;
+		    if (LPC_CT32B1->TC >= TimerInterval)
+		    	LPC_CT32B1->TC = TimerInterval;
 	  }
 }
 /******************************************************************************

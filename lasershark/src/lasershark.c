@@ -19,27 +19,30 @@
  */
 
 #include <string.h>
+#include "LPC13Uxx.h"
 #include "lasershark.h"
 #include "gpio.h"
 #include "config.h"
 #include "ssp.h"
 #include "timer32.h"
-#include "usbreg.h"
 #include "dac124s085.h"
 
-static __INLINE void lasershark_set_interlock_a(bool val)
+unsigned char OUT1Packet[LASERSHARK_USB_CTRL_SIZE]; //User application buffer for receiving and holding OUT packets sent from the host
+unsigned char IN1Packet[LASERSHARK_USB_CTRL_SIZE]; //User application buffer for sending IN packets to the host
+
+static inline void lasershark_set_interlock_a(bool val)
 {
-	GPIOSetValue(LASERSHARK_INTL_A_PORT, LASERSHARK_INTL_A_PIN, val);
+	GPIOSetBitValue(LASERSHARK_INTL_A_PORT, LASERSHARK_INTL_A_PIN, val);
 }
 
-static __INLINE bool lasershark_get_interlock_b()
+static inline bool lasershark_get_interlock_b()
 {
-	return GPIOGetValue(LASERSHARK_INTL_B_PORT, LASERSHARK_INTL_B_PIN);
+	return GPIOGetPinValue(LASERSHARK_INTL_B_PORT, LASERSHARK_INTL_B_PIN);
 }
 
 static __INLINE void lasershark_set_c(bool val)
 {
-	GPIOSetValue(LASERSHARK_C_PORT, LASERSHARK_C_PIN, val);
+	GPIOSetBitValue(LASERSHARK_C_PORT, LASERSHARK_C_PIN, val);
 }
 
 void lasershark_init() {
@@ -172,11 +175,11 @@ void lasershark_init() {
 	}
 #endif
 
-	TIMER32_1_IRQHandler(); // The output is disabled, so the blank buffer will be sent.
+	CT32B1_IRQHandler(); // The output is disabled, so the blank buffer will be sent.
 
 	init_timer32(1, lasershark_core_duration);
 	lasershark_set_ilda_rate(LASERSHARK_ILDA_RATE_DEFAULT);
-	NVIC_SetPriority(TIMER_32_1_IRQn, 1);
+	NVIC_SetPriority(CT32B1_IRQn, 1);
 	enable_timer32(1);
 
 }
@@ -190,11 +193,11 @@ void lasershark_process_command() {
 	case LASERSHARK_CMD_SET_OUTPUT: //Enable/Disable output
 		switch (OUT1Packet[1]) {
 		case LASERSHARK_CMD_OUTPUT_DISABLE: // Disable output
-			GPIOSetValue(LED_PORT, USR1_LED_BIT, 1); // 1 makes voltage across diode 0v
+			GPIOSetBitValue(LED_PORT, USR1_LED_BIT, 1); // 1 makes voltage across diode 0v
 			lasershark_output_enabled = false;
 			break;
 		case LASERSHARK_CMD_OUTPUT_ENABLE: // Enable output
-			GPIOSetValue(LED_PORT, USR1_LED_BIT, 0); // 0 makes voltage across diode >  0v
+			GPIOSetBitValue(LED_PORT, USR1_LED_BIT, 0); // 0 makes voltage across diode >  0v
 			lasershark_output_enabled = true;
 			break;
 		default:
@@ -280,14 +283,18 @@ __inline uint32_t lasershark_get_empty_sample_count()
 					LASERSHARK_RINGBUFFER_SAMPLES - lasershark_ringbuffer_tail + lasershark_ringbuffer_head);
 }
 
-__inline void lasershark_process_data(uint32_t cnt) {
+__inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	uint32_t dat, n, cntmod = (cnt + 3) / 4;
 	uint32_t *pData;
 
 	GPIOToggleValue(LED_PORT, USR2_LED_BIT);
 
 	for (n = 0; n < cntmod; n++) {
-		dat = LPC_USB->RxData;
+		dat = 	(packet[n*4 + 0] << 24) +
+				(packet[n*4 + 1] << 16) +
+				(packet[n*4 + 2] << 8 ) +
+				(packet[n*4 + 3] << 0 );
+
 		pData
 				= ((uint32_t __attribute__((packed)) *) lasershark_ringbuffer[lasershark_ringbuffer_tail]);
 		if (n % 2) { // Odd
@@ -300,8 +307,8 @@ __inline void lasershark_process_data(uint32_t cnt) {
 	}
 }
 
-void TIMER32_1_IRQHandler(void) {
-	LPC_TMR32B1->IR = 1; /* clear interrupt flag */
+void CT32B1_IRQHandler(void) {
+	LPC_CT32B1->IR = 1; /* clear interrupt flag */
     uint32_t temp = (lasershark_ringbuffer_head + 1)
 					% LASERSHARK_RINGBUFFER_SAMPLES;
 
