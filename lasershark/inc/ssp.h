@@ -11,6 +11,17 @@
 #ifndef __SSP_H__
 #define __SSP_H__
 
+#include "gpio.h"
+
+#define SSP0_BUSY() 		(LPC_SSP0->SR & SSPSR_BSY)
+
+#define SSP0_PORT PORT0
+#define SSP0_SSEL_DAC_BIT	2
+#define SSP0_SSEL_SD_BIT	7
+
+#define SSP0_SEL(bit)		GPIOSetBitValue( SSP0_PORT, bit, 0 )
+#define SSP0_UNSEL(bit)		GPIOSetBitValue( SSP0_PORT, bit, 1 )
+
 /* There are there modes in SSP: loopback, master or slave. */
 /* Here are the combination of all the tests. 
 (1) LOOPBACK test:		LOOPBACK_MODE=1, TX_RX_ONLY=0, USE_CS=1;
@@ -28,7 +39,7 @@
 /* When test serial SEEPROM(LOOPBACK_MODE=0, TX_RX_ONLY=0), set USE_CS to 0. */
 /* When LOOPBACK_MODE=1 or TX_RX_ONLY=1, set USE_CS to 1. */
 
-#define USE_CS			1
+#define USE_CS			0
 #define SSP_DEBUG		0
 
 /* SPI read and write buffer size */
@@ -93,6 +104,7 @@ extern void SSPSend( uint8_t *Buf, uint32_t Length );
 extern void SSPSend16( uint16_t *Buf, uint32_t Length );
 extern void SSPSendC16( uint16_t c );
 extern void SSPReceive( uint8_t *buf, uint32_t Length );
+uint8_t SPI_ReceiveByte(void);
 
 #endif  /* __SSP_H__ */
 /*****************************************************************************

@@ -287,7 +287,7 @@ __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	uint32_t dat, n, cntmod = (cnt + 3) / 4;
 	uint32_t *pData;
 
-	GPIOToggleValue(LED_PORT, USR2_LED_BIT);
+	//GPIOToggleValue(LED_PORT, USR2_LED_BIT); // TODO: Had to re-use this pin so set to input
 
 	for (n = 0; n < cntmod; n++) {
 		dat = 	(packet[n*4 + 0] << 24) +
@@ -307,8 +307,8 @@ __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	}
 }
 
-void CT32B1_IRQHandler(void) {
-	LPC_CT32B1->IR = 1; /* clear interrupt flag */
+
+void Lasershark_Update_DAC(void) {
     uint32_t temp = (lasershark_ringbuffer_head + 1)
 					% LASERSHARK_RINGBUFFER_SAMPLES;
 

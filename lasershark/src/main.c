@@ -32,6 +32,10 @@
 #include "mw_usbd_desc.h"
 #include "type.h"
 #include "lasershark.h"
+#include "ssp.h"
+#include "spi_mmc.h"
+
+bool updateDAC = false;
 
 // Variable to store CRP value in. Will be placed automatically
 // by the linker when "Enable Code Read Protect" selected.
@@ -67,7 +71,7 @@ void watchdog_init() {
 }
 #endif
 
-int main(void) {
+int main_init(void) {
 	/* Basic chip initialization is taken care of in SystemInit() called
 	 * from the startup code. SystemInit() and chip settings are defined
 	 * in the CMSIS system_<part family>.c file.
@@ -89,7 +93,7 @@ int main(void) {
 
 	/* Set LED port pin to output */
 	GPIOSetDir(LED_PORT, USR1_LED_BIT, 1);
-	GPIOSetDir(LED_PORT, USR2_LED_BIT, 1);
+	GPIOSetDir(LED_PORT, USR2_LED_BIT, 0); // TODO: Had to re-use this pin so set to input
 
 	/* Enable IOCON blocks for io pin multiplexing.*/
 	LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 16);
@@ -106,17 +110,61 @@ int main(void) {
 
 	// Make USB a lower priority than the timer used for output.
 	NVIC_SetPriority(USB_IRQ_IRQn, 2);
+}
 
-#if (WATCHDOG_ENABLED)
-	watchdog_init();
-#endif
+void CT32B1_IRQHandler(void) {
+	LPC_CT32B1->IR = 1; /* clear interrupt flag */
+	updateDAC = true;
+}
+
+int main(void) {
+	bool sdReady = false;
+	bool readBack = false;
+	int block = 0;
+	int i;
+
+	main_init();
+	//watchdog_init();
 
 	while (1) {
-#if (WATCHDOG_ENABLED)
+		// Wait until it's time to update the DACs
+		while(!updateDAC);
+		updateDAC = false;
+		//Lasershark_Update_DAC();
+
+		// Feed the watchdog before our next wait state
 		watchdog_feed();
-#else
-		asm("nop");
-#endif
+
+		// SD card shares SPI bus with the DACs. Since we just
+		// wrote them, we have a little time to read the SD
+		// before we have to update the DACs again.
+		while(SSP0_BUSY());
+
+		if(!sdReady){
+			if(mmc_init() == 0){
+				sdReady = true;
+			}
+		}else{
+			if(!readBack){
+				mmc_write_block(block);
+			}else{
+				mmc_read_block(block);
+
+				for ( i = 0; i < MMC_DATA_SIZE; i++ ) /* Validate */ {
+				  if ( MMCRDData[i] != MMCWRData[i] )
+				  {
+					  sdReady = false;
+				  }
+				}
+				for ( i = 0; i < MMC_DATA_SIZE; i++ ) /* clear read buffer */ MMCRDData[i] = 0x00;
+
+				readBack = false;
+				block++;
+				if(block > MAX_BLOCK_NUM){
+					block = 0;
+				}
+			}
+		}
 	}
 	return 0;
 }

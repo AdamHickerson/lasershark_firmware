@@ -3,6 +3,7 @@
 	<name>lasershark</name>
 	<comment></comment>
 	<projects>
+		<project>CMSIS_CORE_LPC13Uxx</project>
 		<project>CMSISv2p00_LPC13xx</project>
 	</projects>
 	<buildSpec>
