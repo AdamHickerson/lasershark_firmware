@@ -60,9 +60,9 @@ void SSPInit(void) {
 #endif
 
 	// dss=8bit, frame format = spi, CPOL = 0, cpha = 0, SCR is 7
-	LPC_SSP0->CR0 = 0x7 << 0 | 0x0 << 4 | 0 << 6 | 0 << 7 | 0x07 << 8;
+	LPC_SSP0->CR0 = 0x7 << 0 | 0x0 << 4 | 0 << 6 | 0 << 7 | 0x0F << 8;
 	/* SSPCPSR clock prescale register, master mode, minimum divisor is 0x02 */
-	LPC_SSP0->CPSR = 0x2; /* CPSDVSR */
+	LPC_SSP0->CPSR = 40; /* CPSDVSR */
 
 	for (i = 0; i < FIFOSIZE; i++)
 	{
