@@ -22,24 +22,18 @@ along with Lasershark. If not, see <http://www.gnu.org/licenses/>.
 #include "dac124s085.h"
 #include "ssp.h"
 
+#define DAC_SSP_NUMBER 0
+
 void dac124s085_init(void) {
 	// Nothing to do.
 }
 
 
 __inline void dac124s085_dac(volatile const uint16_t *abcd) {
-	SSP0_SEL(SSP0_SSEL_DAC_BIT);
     SSPSendC16(DAC124S085_INPUT_REG_A | DAC124S085_OP_WRITE_NO_UPDATE | (DAC124S085_INPUT_REG_DATA_MASK & abcd[0])); // A
-	SSP0_UNSEL(SSP0_SSEL_DAC_BIT);
-	SSP0_SEL(SSP0_SSEL_DAC_BIT);
     SSPSendC16(DAC124S085_INPUT_REG_B | DAC124S085_OP_WRITE_NO_UPDATE | (DAC124S085_INPUT_REG_DATA_MASK & abcd[1])); // B
-	SSP0_UNSEL(SSP0_SSEL_DAC_BIT);
-	SSP0_SEL(SSP0_SSEL_DAC_BIT);
     SSPSendC16(DAC124S085_INPUT_REG_C | DAC124S085_OP_WRITE_NO_UPDATE | (DAC124S085_INPUT_REG_DATA_MASK & abcd[2])); // C
-	SSP0_UNSEL(SSP0_SSEL_DAC_BIT);
-	SSP0_SEL(SSP0_SSEL_DAC_BIT);
     SSPSendC16(DAC124S085_INPUT_REG_D | DAC124S085_OP_WRITE_UPDATE_OUTPUTS | (DAC124S085_INPUT_REG_DATA_MASK & abcd[3])); // D
-	SSP0_UNSEL(SSP0_SSEL_DAC_BIT);
 }
 
 __inline void dac124s085_dac_chn_set(uint16_t reg, uint16_t val, bool update_outputs) {
@@ -47,7 +41,5 @@ __inline void dac124s085_dac_chn_set(uint16_t reg, uint16_t val, bool update_out
 	{
 		return;
 	}
-	SSP0_SEL(SSP0_SSEL_DAC_BIT);
     SSPSendC16(reg | (update_outputs ? DAC124S085_OP_WRITE_UPDATE_OUTPUTS : DAC124S085_OP_WRITE_NO_UPDATE) | (DAC124S085_INPUT_REG_DATA_MASK & val)); // D
-	SSP0_UNSEL(SSP0_SSEL_DAC_BIT);
 }

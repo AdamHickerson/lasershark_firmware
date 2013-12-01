@@ -99,7 +99,7 @@ extern unsigned char IN1Packet[]; //User application buffer for sending IN packe
 int32_t lasershark_usb_data_packet_size;
 int32_t lasershark_usb_data_packet_samp_count;
 
-#define LASERSHARK_RINGBUFFER_SAMPLES 768
+#define LASERSHARK_RINGBUFFER_SAMPLES 256
 #define LASERSHARK_ILDA_CHANNELS 4
 volatile uint16_t lasershark_ringbuffer[LASERSHARK_RINGBUFFER_SAMPLES][LASERSHARK_ILDA_CHANNELS];
 volatile uint16_t lasershark_blankingbuffer[LASERSHARK_ILDA_CHANNELS];
@@ -125,6 +125,8 @@ bool lasershark_set_ilda_rate(uint32_t ilda_rate);
 __inline uint32_t lasershark_get_empty_sample_count();
 
 __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt);
+
+__inline bool lasershark_buffer_is_empty();
 
 void CT32B1_IRQHandler(void);
 

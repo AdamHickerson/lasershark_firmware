@@ -8,234 +8,277 @@
 #include "type.h"
 #include "spi_mmc.h"
 #include "ssp.h"
+#include "diskio.h" // This file implements the disk access functions needed by the FAT library
 
-uint8_t MMCWRData[MMC_DATA_SIZE];
-uint8_t MMCRDData[MMC_DATA_SIZE];
-uint8_t MMCCmd[MMC_CMD_SIZE];
-uint8_t MMCStatus = 0;
+#define SD_SSP_NUMBER 1
 
-/************************** MMC Init *********************************/
-/*
- * Initialises the MMC into SPI mode and sets block size(512), returns
- * 0 on success
- *
- */
-int mmc_init() {
-	int i;
+/* MMC/SD command */
+#define CMD0	(0)			/* GO_IDLE_STATE */
+#define CMD1	(1)			/* SEND_OP_COND (MMC) */
+#define	ACMD41	(0x80+41)	/* SEND_OP_COND (SDC) */
+#define CMD8	(8)			/* SEND_IF_COND */
+#define CMD9	(9)			/* SEND_CSD */
+#define CMD10	(10)		/* SEND_CID */
+#define CMD12	(12)		/* STOP_TRANSMISSION */
+#define ACMD13	(0x80+13)	/* SD_STATUS (SDC) */
+#define CMD16	(16)		/* SET_BLOCKLEN */
+#define CMD17	(17)		/* READ_SINGLE_BLOCK */
+#define CMD18	(18)		/* READ_MULTIPLE_BLOCK */
+#define CMD23	(23)		/* SET_BLOCK_COUNT (MMC) */
+#define	ACMD23	(0x80+23)	/* SET_WR_BLK_ERASE_COUNT (SDC) */
+#define CMD24	(24)		/* WRITE_BLOCK */
+#define CMD25	(25)		/* WRITE_MULTIPLE_BLOCK */
+#define CMD32	(32)		/* ERASE_ER_BLK_START */
+#define CMD33	(33)		/* ERASE_ER_BLK_END */
+#define CMD38	(38)		/* ERASE */
+#define CMD55	(55)		/* APP_CMD */
+#define CMD58	(58)		/* READ_OCR */
 
-	/* Generate a data pattern for write block */
-	for (i = 0; i < MMC_DATA_SIZE; i++) {
-		MMCWRData[i] = i;
-	}
-	MMCStatus = 0;
+uint8_t MMCCmd[10];
+DSTATUS MMCStatus = STA_NOINIT;
+static BYTE CardType;			/* Card type flags */
 
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
+/*-----------------------------------------------------------------------*/
+/* Send a command packet to the MMC                                      */
+/*-----------------------------------------------------------------------*/
 
-	/* initialise the MMC card into SPI mode by sending 80 clks on */
-	/* Use MMCRDData as a temporary buffer for SSPSend() */
-	for (i = 0; i < 10; i++) {
-		MMCRDData[i] = 0xFF;
-	}
-	SSPSend(MMCRDData, 10);
+/*-----------------------------------------------------------------------*/
+/* Wait for card ready                                                   */
+/*-----------------------------------------------------------------------*/
 
-	SSP0_SEL(SSP0_SSEL_SD_BIT);
-	/* send CMD0(RESET or GO_IDLE_STATE) command, all the arguments
-	 are 0x00 for the reset command, precalculated checksum */
-	MMCCmd[0] = 0x40;
-	MMCCmd[1] = 0x00;
-	MMCCmd[2] = 0x00;
-	MMCCmd[3] = 0x00;
-	MMCCmd[4] = 0x00;
-	MMCCmd[5] = 0x95;
-	SSPSend(MMCCmd, MMC_CMD_SIZE);
-	/* if = 1 then there was a timeout waiting for 0x01 from the MMC */
-	if (mmc_response(0x01) == 1) {
-		MMCStatus = IDLE_STATE_TIMEOUT;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
+static
+int wait_ready (	/* 1:Ready, 0:Timeout */
+	UINT wt			/* Timeout [ms] */
+)
+{
+	BYTE d;
+	int Timer2;
 
-	/* Send some dummy clocks after GO_IDLE_STATE */
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-	SPI_ReceiveByte();
-
-	SSP0_SEL(SSP0_SSEL_SD_BIT);
-	/* must keep sending command until zero response ia back. */
-	i = MAX_TIMEOUT;
+	Timer2 = wt;
 	do {
-		/* send mmc CMD1(SEND_OP_COND) to bring out of idle state */
-		/* all the arguments are 0x00 for command one */
-		MMCCmd[0] = 0x41;
-		MMCCmd[1] = 0x00;
-		MMCCmd[2] = 0x00;
-		MMCCmd[3] = 0x00;
-		MMCCmd[4] = 0x00;
-		/* checksum is no longer required but we always send 0xFF */
-		MMCCmd[5] = 0xFF;
-		SSPSend(MMCCmd, MMC_CMD_SIZE);
-		i--;
-	} while ((mmc_response(0x00) != 0) && (i > 0));
-	/* timeout waiting for 0x00 from the MMC */
-	if (i == 0) {
-		MMCStatus = OP_COND_TIMEOUT;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
+		d = SPI_ReceiveByte();
+		Timer2--;
+		/* This loop takes a time. Insert rot_rdq() here for multitask envilonment. */
+	} while (d != 0xFF && Timer2);	/* Wait for card goes ready or timeout */
 
-	/* Send some dummy clocks after SEND_OP_COND */
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-	SPI_ReceiveByte();
-
-	SSP0_SEL(SSP0_SSEL_SD_BIT);
-	/* send MMC CMD16(SET_BLOCKLEN) to set the block length */
-	MMCCmd[0] = 0x50;
-	MMCCmd[1] = 0x00; /* 4 bytes from here is the block length */
-	/* LSB is first */
-	/* 00 00 00 10 set to 16 bytes */
-	/* 00 00 02 00 set to 512 bytes */
-	MMCCmd[2] = 0x00;
-	/* high block length bits - 512 bytes */
-	MMCCmd[3] = 0x02;
-	/* low block length bits */
-	MMCCmd[4] = 0x00;
-	/* checksum is no longer required but we always send 0xFF */
-	MMCCmd[5] = 0xFF;
-	SSPSend(MMCCmd, MMC_CMD_SIZE);
-	if ((mmc_response(0x00)) == 1) {
-		MMCStatus = SET_BLOCKLEN_TIMEOUT;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-	SPI_ReceiveByte();
-	return 0;
+	return (d == 0xFF) ? 1 : 0;
 }
 
-/************************** MMC Write Block ***************************/
-/* write a block of data based on the length that has been set
- * in the SET_BLOCKLEN command.
- * Send the WRITE_SINGLE_BLOCK command out first, check the
- * R1 response, then send the data start token(bit 0 to 0) followed by
- * the block of data. The test program sets the block length to 512
- * bytes. When the data write finishs, the response should come back
- * as 0xX5 bit 3 to 0 as 0101B, then another non-zero value indicating
- * that MMC card is in idle state again.
- *
- */
-int mmc_write_block(uint32_t block_number) {
-	uint32_t varl, varh;
-	uint8_t Status;
 
-	SSP0_SEL(SSP0_SSEL_SD_BIT);
-	/* block size has been set in mmc_init() */
-	varl = ((block_number & 0x003F) << 9);
-	varh = ((block_number & 0xFFC0) >> 7);
-	/* send mmc CMD24(WRITE_SINGLE_BLOCK) to write the data to MMC card */
-	MMCCmd[0] = 0x58;
-	/* high block address bits, varh HIGH and LOW */
-	MMCCmd[1] = varh >> 0x08;
-	MMCCmd[2] = varh & 0xFF;
-	/* low block address bits, varl HIGH and LOW */
-	MMCCmd[3] = varl >> 0x08;
-	MMCCmd[4] = varl & 0xFF;
-	/* checksum is no longer required but we always send 0xFF */
-	MMCCmd[5] = 0xFF;
-	SSPSend(MMCCmd, MMC_CMD_SIZE);
-	/* if mmc_response returns 1 then we failed to get a 0x00 response */
-	if ((mmc_response(0x00)) == 1) {
-		MMCStatus = WRITE_BLOCK_TIMEOUT;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-	/* Set bit 0 to 0 which indicates the beginning of the data block */
-	MMCCmd[0] = 0xFE;
-	SSPSend(MMCCmd, 1);
-	/* send data, pattern as 0x00,0x01,0x02,0x03,0x04,0x05 ...*/
-	SSPSend(MMCWRData, MMC_DATA_SIZE);
-	/* Send dummy checksum */
-	/* when the last check sum is sent, the response should come back
-	 immediately. So, check the SPI FIFO MISO and make sure the status
-	 return 0xX5, the bit 3 through 0 should be 0x05 */
-	MMCCmd[0] = 0xFF;
-	MMCCmd[1] = 0xFF;
-	/* Set bit 0 to 0 which indicates the beginning of the data block */
-	MMCCmd[0] = 0xFE;
-	SSPSend(MMCCmd, 1);
-	/* send data, pattern as 0x00,0x01,0x02,0x03,0x04,0x05 ...*/
-	SSPSend(MMCWRData, MMC_DATA_SIZE);
-	/* Send dummy checksum */
-	/* when the last check sum is sent, the response should come back
-	 immediately. So, check the SPI FIFO MISO and make sure the status
-	 return 0xX5, the bit 3 through 0 should be 0x05 */
-	MMCCmd[0] = 0xFF;
-	MMCCmd[1] = 0xFF;
 
-	Status = SPI_ReceiveByte();
-	if ((Status & 0x0F) != 0x05) {
-		MMCStatus = WRITE_BLOCK_FAIL;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-	/* if the status is already zero, the write hasn't finished
-	 yet and card is busy */
-	if (mmc_wait_for_write_finish() == 1) {
-		MMCStatus = WRITE_BLOCK_FAIL;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-	SPI_ReceiveByte();
-	return 0;
+/*-----------------------------------------------------------------------*/
+/* Deselect card and release SPI                                         */
+/*-----------------------------------------------------------------------*/
+
+static
+void deselect (void)
+{
+	SSP0_UNSEL(SSP0_SSEL_SD_BIT);		/* CS = H */
+	SPI_ReceiveByte();	/* Dummy clock (force DO hi-z for multiple slave SPI) */
 }
 
-/************************** MMC Read Block ****************************/
-/*
- * Reads a 512 Byte block from the MMC
- * Send READ_SINGLE_BLOCK command first, wait for response come back
- * 0x00 followed by 0xFE. The call SPI_Receive() to read the data
- * block back followed by the checksum.
- *
- */
-int mmc_read_block(uint32_t block_number) {
-	uint32_t Checksum;
-	uint32_t varh, varl;
 
+
+/*-----------------------------------------------------------------------*/
+/* Select card and wait for ready                                        */
+/*-----------------------------------------------------------------------*/
+
+static
+int select (void)	/* 1:OK, 0:Timeout */
+{
 	SSP0_SEL(SSP0_SSEL_SD_BIT);
-	varl = ((block_number & 0x003F) << 9);
-	varh = ((block_number & 0xFFC0) >> 7);
-	/* send MMC CMD17(READ_SINGLE_BLOCK) to read the data from MMC card */
-	MMCCmd[0] = 0x51;
-	/* high block address bits, varh HIGH and LOW */
-	MMCCmd[1] = varh >> 0x08;
-	MMCCmd[2] = varh & 0xFF;
-	/* low block address bits, varl HIGH and LOW */
-	MMCCmd[3] = varl >> 0x08;
-	MMCCmd[4] = varl & 0xFF;
-	/* checksum is no longer required but we always send 0xFF */
-	MMCCmd[5] = 0xFF;
-	SSPSend(MMCCmd, MMC_CMD_SIZE);
-	/* if mmc_response returns 1 then we failed to get a 0x00 response */
-	if ((mmc_response(0x00)) == 1) {
-		MMCStatus = READ_BLOCK_TIMEOUT;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-	/* wait for data token */
-	if ((mmc_response(0xFE)) == 1) {
-		MMCStatus = READ_BLOCK_DATA_TOKEN_MISSING;
-		SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-		return MMCStatus;
-	}
-	/* Get the block of data based on the length */
-	SSPReceive(MMCRDData, MMC_DATA_SIZE);
-	/* CRC bytes that are not needed */
-	Checksum = SPI_ReceiveByte();
-	Checksum = Checksum << 0x08 | SPI_ReceiveByte();
-	SSP0_UNSEL(SSP0_SSEL_SD_BIT);
-	SPI_ReceiveByte();
-	return 0;
+	SPI_ReceiveByte();	/* Dummy clock (force DO enabled) */
+
+	if (wait_ready(500)) return 1;	/* OK */
+	deselect();
+	return 0;	/* Timeout */
 }
+
+static
+BYTE send_cmd (		/* Return value: R1 resp (bit7==1:Failed to send) */
+	BYTE cmd,		/* Command index */
+	DWORD arg		/* Argument */
+)
+{
+	BYTE n, res;
+
+
+	if (cmd & 0x80) {	/* Send a CMD55 prior to ACMD<n> */
+		cmd &= 0x7F;
+		res = send_cmd(CMD55, 0);
+		if (res > 1) return res;
+	}
+
+	/* Select the card and wait for ready except to stop multiple block read */
+	if (cmd != CMD12) {
+		deselect();
+		if (!select()) return 0xFF;
+	}
+
+	/* Send command packet */
+	MMCCmd[0] = (0x40 | cmd);				/* Start + command index */
+	MMCCmd[1] = ((BYTE)(arg >> 24));		/* Argument[31..24] */
+	MMCCmd[2] = ((BYTE)(arg >> 16));		/* Argument[23..16] */
+	MMCCmd[3] = ((BYTE)(arg >> 8));			/* Argument[15..8] */
+	MMCCmd[4] = ((BYTE)arg);				/* Argument[7..0] */
+	n = 0x01;							/* Dummy CRC + Stop */
+	if (cmd == CMD0) n = 0x95;			/* Valid CRC for CMD0(0) */
+	if (cmd == CMD8) n = 0x87;			/* Valid CRC for CMD8(0x1AA) */
+	MMCCmd[5] = (n);
+	SSPSend(MMCCmd, 6);
+
+	/* Receive command resp */
+	if (cmd == CMD12) SPI_ReceiveByte();	/* Diacard following one byte when CMD12 */
+	n = 10;								/* Wait for response (10 bytes max) */
+	do
+		res = SPI_ReceiveByte();
+	while ((res & 0x80) && --n);
+
+	return res;							/* Return received response */
+}
+
+/* Receive multiple byte */
+static
+void rcvr_spi_multi (
+	BYTE *buff,		/* Pointer to data buffer */
+	UINT btr		/* Number of bytes to receive (16, 64 or 512) */
+)
+{
+	while (btr) {					/* Receive the data block into buffer */
+		*buff++ = SPI_ReceiveByte();
+		btr--;
+	}
+}
+
+/*-----------------------------------------------------------------------*/
+/* Receive a data packet from the MMC                                    */
+/*-----------------------------------------------------------------------*/
+
+static
+int rcvr_datablock (	/* 1:OK, 0:Error */
+	BYTE *buff,			/* Data buffer */
+	UINT btr			/* Data block length (byte) */
+)
+{
+	BYTE token;
+	int Timer1;
+
+	Timer1 = 5000;
+	do {							/* Wait for DataStart token in timeout of 200ms */
+		token = SPI_ReceiveByte();
+		Timer1--;
+	} while ((token == 0xFF) && Timer1);
+	if(Timer1 == 0){
+		return 0;
+	}
+
+	if(token != 0xFE) return 0;		/* Function fails if invalid DataStart token or timeout */
+
+	rcvr_spi_multi(buff, btr);		/* Store trailing data to the buffer */
+	SPI_ReceiveByte(); SPI_ReceiveByte();			/* Discard CRC */
+
+	return 1;						/* Function succeeded */
+}
+
+/*-----------------------------------------------------------------------*/
+/* Inidialize a Drive                                                    */
+/*-----------------------------------------------------------------------*/
+
+DSTATUS disk_initialize (
+	BYTE pdrv				/* Physical drive nmuber (0..) */
+)
+{
+	BYTE n, cmd, ty, ocr[4];
+	int Timer1;
+
+	if (pdrv) return STA_NOINIT;			/* Supports only drive 0 */
+
+	ssp_slow_clock_mode(SD_SSP_NUMBER);
+	for (n = 10; n; n--) SPI_ReceiveByte();	/* Send 80 dummy clocks */
+
+	ty = 0;
+	if (send_cmd(CMD0, 0) == 1) {			/* Put the card SPI/Idle state */
+		Timer1 = 1000;						/* Initialization timeout = 1 sec */
+		if (send_cmd(CMD8, 0x1AA) == 1) {	/* SDv2? */
+			for (n = 0; n < 4; n++) ocr[n] = SPI_ReceiveByte();	/* Get 32 bit return value of R7 resp */
+			if (ocr[2] == 0x01 && ocr[3] == 0xAA) {				/* Is the card supports vcc of 2.7-3.6V? */
+				while (Timer1 && send_cmd(ACMD41, 1UL << 30)) {Timer1--;}	/* Wait for end of initialization with ACMD41(HCS) */
+				if (Timer1 && send_cmd(CMD58, 0) == 0) {		/* Check CCS bit in the OCR */
+					for (n = 0; n < 4; n++) ocr[n] = SPI_ReceiveByte();
+					ty = (ocr[0] & 0x40) ? CT_SD2 | CT_BLOCK : CT_SD2;	/* Card id SDv2 */
+				}
+			}
+		} else {	/* Not SDv2 card */
+			if (send_cmd(ACMD41, 0) <= 1) 	{	/* SDv1 or MMC? */
+				ty = CT_SD1; cmd = ACMD41;	/* SDv1 (ACMD41(0)) */
+			} else {
+				ty = CT_MMC; cmd = CMD1;	/* MMCv3 (CMD1(0)) */
+			}
+			while (Timer1 && send_cmd(cmd, 0)) {Timer1--;}		/* Wait for end of initialization */
+			if (!Timer1 || send_cmd(CMD16, 512) != 0)	/* Set block length: 512 */
+				ty = 0;
+		}
+	}
+	CardType = ty;	/* Card type */
+	deselect();
+
+	if (ty) {			/* OK */
+		ssp_fast_clock_mode(SD_SSP_NUMBER);
+		MMCStatus &= ~STA_NOINIT;	/* Clear STA_NOINIT flag */
+	} else {			/* Failed */
+		MMCStatus = STA_NOINIT;
+	}
+
+	return MMCStatus;
+}
+
+DSTATUS disk_status (
+	BYTE pdrv		/* Physical drive nmuber (0..) */
+)
+{
+	// Only drive 0 is supported
+	if(pdrv != 0){
+		return STA_NOINIT;
+	}
+
+	return MMCStatus;
+}
+
+/*-----------------------------------------------------------------------*/
+/* Read Sector(s)                                                        */
+/*-----------------------------------------------------------------------*/
+
+DRESULT disk_read (
+	BYTE pdrv,		/* Physical drive nmuber (0..) */
+	BYTE *buff,		/* Data buffer to store read data */
+	DWORD sector,	/* Sector address (LBA) */
+	UINT count		/* Number of sectors to read (1..128) */
+)
+{
+	if (pdrv || !count) return RES_PARERR;		/* Check parameter */
+	if (MMCStatus & STA_NOINIT) return RES_NOTRDY;	/* Check if drive is ready */
+
+	if (!(CardType & CT_BLOCK)) sector *= 512;	/* LBA ot BA conversion (byte addressing cards) */
+
+	if (count == 1) {	/* Single sector read */
+		if ((send_cmd(CMD17, sector) == 0)	/* READ_SINGLE_BLOCK */
+			&& rcvr_datablock(buff, 512))
+			count = 0;
+	}
+	else {				/* Multiple sector read */
+		if (send_cmd(CMD18, sector) == 0) {	/* READ_MULTIPLE_BLOCK */
+			do {
+				if (!rcvr_datablock(buff, 512)) break;
+				buff += 512;
+			} while (--count);
+			send_cmd(CMD12, 0);				/* STOP_TRANSMISSION */
+		}
+	}
+	deselect();
+
+	return count ? RES_ERROR : RES_OK;	/* Return result */
+}
+
 /***************** MMC get response *******************/
 /*
  * Repeatedly reads the MMC until we get the

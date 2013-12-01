@@ -25,6 +25,7 @@
 #include <cr_section_macros.h>
 #include <NXP/crp.h>
 #include <stdbool.h>
+#include <string.h>
 #include "config.h"
 #include "gpio.h"
 #include "usbhw.h"
@@ -34,6 +35,17 @@
 #include "lasershark.h"
 #include "ssp.h"
 #include "spi_mmc.h"
+#include "ff.h"
+#include "diskio.h"
+#include "dac124s085.h"
+
+FATFS FatFs;
+DIR Dir;
+FIL File;
+FILINFO Finfo;
+#define FILE_READ_SAMPLES 32
+#define FILE_READ_BYTES FILE_READ_SAMPLES * 8
+BYTE Buff[FILE_READ_BYTES] __attribute__ ((aligned (4))) ;
 
 bool updateDAC = false;
 
@@ -71,7 +83,7 @@ void watchdog_init() {
 }
 #endif
 
-int main_init(void) {
+void main_init(void) {
 	/* Basic chip initialization is taken care of in SystemInit() called
 	 * from the startup code. SystemInit() and chip settings are defined
 	 * in the CMSIS system_<part family>.c file.
@@ -102,68 +114,112 @@ int main_init(void) {
 	lasershark_init();
 
 	// Turn on USB
-	USBIOClkConfig();
+	//USBIOClkConfig();
 
-	usb_populate_serialno(); // Populate the devices serial number
+	//usb_populate_serialno(); // Populate the devices serial number
 	// USB Initialization
-	USB_Init();
+	//USB_Init();
 
 	// Make USB a lower priority than the timer used for output.
 	NVIC_SetPriority(USB_IRQ_IRQn, 2);
 }
 
-void CT32B1_IRQHandler(void) {
-	LPC_CT32B1->IR = 1; /* clear interrupt flag */
-	updateDAC = true;
-}
+enum { INIT_DISK, MOUNT_FS, FIND_FILE, PLAY_FILE, FINISH_FILE };
+int playFileState = INIT_DISK;
+
+int loopCount = 0;
+int loopFileCount = 10;
 
 int main(void) {
-	bool sdReady = false;
-	bool readBack = false;
-	int block = 0;
-	int i;
+	int fs_result;
+	uint32_t bytesRead;
 
 	main_init();
 	//watchdog_init();
 
 	while (1) {
-		// Wait until it's time to update the DACs
-		while(!updateDAC);
-		updateDAC = false;
-		//Lasershark_Update_DAC();
-
-		// Feed the watchdog before our next wait state
 		watchdog_feed();
 
-		// SD card shares SPI bus with the DACs. Since we just
-		// wrote them, we have a little time to read the SD
-		// before we have to update the DACs again.
-		while(SSP0_BUSY());
+		switch(playFileState){
+		default:
+		case INIT_DISK:
+			// TODO: Card insert detect
+			playFileState = MOUNT_FS;
+			break;
 
-		if(!sdReady){
-			if(mmc_init() == 0){
-				sdReady = true;
+		case MOUNT_FS:
+			fs_result = f_mount(&FatFs, " ", 1);
+			if(fs_result == 0){
+				f_opendir(&Dir, "/");
+				playFileState = FIND_FILE;
 			}
-		}else{
-			if(!readBack){
-				mmc_write_block(block);
-			}else{
-				mmc_read_block(block);
+			break;
 
-				for ( i = 0; i < MMC_DATA_SIZE; i++ ) /* Validate */ {
-				  if ( MMCRDData[i] != MMCWRData[i] )
-				  {
-					  sdReady = false;
-				  }
+		case FIND_FILE:
+			// Look at one file per loop
+			fs_result = f_readdir(&Dir, &Finfo); // f_readdir reads the next file in the listing
+			if ((fs_result != FR_OK)){
+				// Something's wrong
+				playFileState = MOUNT_FS;
+				lasershark_output_enabled = false;
+				break;
+			}else if(!Finfo.fname[0]){
+				// End of directory. Start from the top
+				f_opendir(&Dir, "/");
+				break;
+			}
+
+			if (Finfo.fattrib & AM_DIR) {
+				// TODO: Scan subdirectories (or maybe don't bother?)
+				break;
+			}
+
+			// It's a real file. See if it's a .lsr that we can play
+			if(strncmp(&(Finfo.fname[strlen(Finfo.fname) - 4]), ".LS2", 4) == 0){
+				// Yep. Get ready to play it
+				f_open(&File, Finfo.fname, FA_READ);
+
+				// The first byte in the file specifies the sample rate
+				// in kHz
+				f_read(&File, Buff, 1, &bytesRead);
+				lasershark_set_ilda_rate(Buff[0] * 1000);
+
+				playFileState = PLAY_FILE;
+
+				loopCount = 0;
+			}
+			break;
+		case PLAY_FILE:
+			if(lasershark_get_empty_sample_count() > FILE_READ_SAMPLES){
+				// Room for more data
+				fs_result = f_read(&File, Buff, FILE_READ_BYTES, &bytesRead);
+				if(fs_result != 0){
+					// Some read error
+					playFileState = FIND_FILE;
+					break;
 				}
-				for ( i = 0; i < MMC_DATA_SIZE; i++ ) /* clear read buffer */ MMCRDData[i] = 0x00;
 
-				readBack = false;
-				block++;
-				if(block > MAX_BLOCK_NUM){
-					block = 0;
+				lasershark_process_data(Buff, bytesRead);
+				if(lasershark_get_empty_sample_count() <= FILE_READ_SAMPLES){
+					// Buffer is full. Start playing
+					lasershark_output_enabled = true;
+				}
+
+				if(bytesRead < FILE_READ_BYTES){
+					// EOF
+					loopCount++;
+					if(loopCount > loopFileCount){
+						f_lseek(&File, 1); // Skip first byte (sets sample rate)
+					}else{
+						playFileState = FINISH_FILE;
+					}
 				}
 			}
+		case FINISH_FILE:
+			if(lasershark_buffer_is_empty()){
+				playFileState = FIND_FILE;
+			}
+			break;
 		}
 	}
 	return 0;

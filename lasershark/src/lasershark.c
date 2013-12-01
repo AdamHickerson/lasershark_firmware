@@ -283,6 +283,10 @@ __inline uint32_t lasershark_get_empty_sample_count()
 					LASERSHARK_RINGBUFFER_SAMPLES - lasershark_ringbuffer_tail + lasershark_ringbuffer_head);
 }
 
+__inline bool lasershark_buffer_is_empty(){
+	return (lasershark_ringbuffer_head + 1) % LASERSHARK_RINGBUFFER_SAMPLES == lasershark_ringbuffer_tail;
+}
+
 __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	uint32_t dat, n, cntmod = (cnt + 3) / 4;
 	uint32_t *pData;
@@ -307,8 +311,8 @@ __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	}
 }
 
-
-void Lasershark_Update_DAC(void) {
+void CT32B1_IRQHandler(void) {
+	LPC_CT32B1->IR = 1; /* clear interrupt flag */
     uint32_t temp = (lasershark_ringbuffer_head + 1)
 					% LASERSHARK_RINGBUFFER_SAMPLES;
 
@@ -316,9 +320,8 @@ void Lasershark_Update_DAC(void) {
 		// This is buffer sent when the system is off
 		lasershark_blankingbuffer[0] = DAC124S085_DAC_VAL_MIN; // A
 		lasershark_blankingbuffer[1] = DAC124S085_DAC_VAL_MIN; // B
-		lasershark_blankingbuffer[2] = DAC124S085_INPUT_REG_DATA_MASK
-				& DAC124S085_DAC_VAL_MID; // INTL_A, C, X
-		lasershark_blankingbuffer[3] = DAC124S085_DAC_VAL_MID; // Y
+		lasershark_blankingbuffer[2] = lasershark_ringbuffer[lasershark_ringbuffer_head][2];
+		lasershark_blankingbuffer[3] = lasershark_ringbuffer[lasershark_ringbuffer_head][3];
 
 		lasershark_set_interlock_a(false);
 		dac124s085_dac(lasershark_blankingbuffer);

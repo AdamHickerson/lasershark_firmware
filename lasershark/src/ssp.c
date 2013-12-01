@@ -25,58 +25,95 @@
 void SSPInit(void) {
 	uint8_t i, Dummy = Dummy;
 
-	LPC_SYSCON->PRESETCTRL |= (0x1 << 0);
-	LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 11);
+	LPC_SYSCON->PRESETCTRL |= 0x05; // Reset SSP0 and SSP1
+	LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 11) | (1 << 18); // Turn on clock to SSP0 and SSP1
 	LPC_SYSCON->SSP0CLKDIV = 0x01;			/* Divided by 1 (PCKL) */
-	LPC_IOCON->PIO0_8 &= ~0x07; /*  SSP I/O config */
-	LPC_IOCON->PIO0_8 |= 0x01; /* SSP MISO */
-	LPC_IOCON->PIO0_9 &= ~0x07;
-	LPC_IOCON->PIO0_9 |= 0x01; /* SSP MOSI */
-#ifdef __JTAG_DISABLED
-	LPC_IOCON->SCKLOC = 0x00;
-	LPC_IOCON->JTAG_TCK_PIO0_10 &= ~0x07;
-	LPC_IOCON->JTAG_TCK_PIO0_10 |= 0x02; /* SSP CLK */
-#endif
+	LPC_SYSCON->SSP1CLKDIV = 0x01;			/* Divided by 1 (PCKL) */
 
-#if 1
-	LPC_IOCON->PIO1_29 = 0x01; /* SCK0 */
-#else
-	LPC_IOCON->SCKLOC = 0x02;
-	LPC_IOCON->PIO0_6 = 0x02; /* P0.6 function 2 is SSP clock, need to combined
-	 with IOCONSCKLOC register setting */
-#endif
+	// SSP0 I/O Config
+	LPC_IOCON->PIO0_8 =  0x00; //SSP0 MISO (Not used [0x01 to select])
+	LPC_IOCON->PIO0_9 =  0x01; //SSP0 MOSI
+	LPC_IOCON->PIO1_29 = 0x01; //SSP0 SCK
+	LPC_IOCON->PIO0_2 =  0x01; //SSP0 SSEL - It's safe to let the hardware control this
 
-#if USE_CS
-	LPC_IOCON->PIO0_2 &= ~0x07;
-	LPC_IOCON->PIO0_2 |= 0x01; /* SSP SSEL */
-#else
-	LPC_IOCON->PIO0_2 = 0; /* SSP SSEL is a GPIO pin */
-	LPC_IOCON->PIO0_7 = 0; /* SSEL 1 is a GPIO */
-	/* port0, bit 2 is set to GPIO output and high */
-	GPIOSetDir( SSP0_PORT, SSP0_SSEL_DAC_BIT, 1 );
-	GPIOSetBitValue( SSP0_PORT, SSP0_SSEL_DAC_BIT, 1 );
+	// SSP1 I/O Config
+	LPC_IOCON->PIO1_21 = 0x02; // SSP1 MISO
+	LPC_IOCON->PIO0_21 = 0x02; // SSP1 MOSI
+	LPC_IOCON->PIO1_20 = 0x02; // SSP1 SCK
+	LPC_IOCON->PIO0_7 = 0; /* SSEL1 is a GPIO */
 	GPIOSetDir( SSP0_PORT, SSP0_SSEL_SD_BIT, 1 );
 	GPIOSetBitValue( SSP0_PORT, SSP0_SSEL_SD_BIT, 1 );
-#endif
 
-	// dss=8bit, frame format = spi, CPOL = 0, cpha = 0, SCR is 7
-	LPC_SSP0->CR0 = 0x7 << 0 | 0x0 << 4 | 0 << 6 | 0 << 7 | 0x0F << 8;
-	/* SSPCPSR clock prescale register, master mode, minimum divisor is 0x02 */
-	LPC_SSP0->CPSR = 40; /* CPSDVSR */
+	LPC_SSP0->CR0 = 0; // Clear out
+	LPC_SSP1->CR0 = 0; // Clear out
+
+	ssp_set_bits(0, 16); // DAC SPI uses 16 bit transfers
+	ssp_set_bits(1, 8); // SD card uses 8 bit transfers
+
+	ssp_fast_clock_mode(0); // DAC SPI always runs fast
+	ssp_slow_clock_mode(1); // SD SPI starts slow
 
 	for (i = 0; i < FIFOSIZE; i++)
 	{
 		Dummy = LPC_SSP0->DR; /* clear the RxFIFO */
+		Dummy = LPC_SSP1->DR; /* clear the RxFIFO */
 	}
 
-	/* Device select as master, SSP Enabled */
-	/* Master mode */
-	LPC_SSP0->CR1 = SSPCR1_SSE;
-
-	/* Set SSPINMS registers to enable interrupts */
-	/* enable all error related interrupts */
-	//LPC_SSP0->IMSC = SSPIMSC_RORIM | SSPIMSC_RTIM;
 	return;
+}
+
+__inline LPC_SSP0_Type* getSSP(int sspNumber){
+	if(sspNumber == 1){
+		// These are actually the same type
+		return (LPC_SSP0_Type*) LPC_SSP1;
+	}else{
+		return LPC_SSP0;
+	}
+}
+
+void ssp_fast_clock_mode(int sspNumber){
+	LPC_SSP0_Type* SSP = getSSP(sspNumber);
+
+	// Disable SPI
+	SSP->CR1 = 0;
+
+	SSP->CR0 &= ~(0xFF00);
+	SSP->CR0 |= 0x0100;
+	SSP->CPSR = 2; // Clock prescale (minimum value is 2)
+
+	// Re-enable
+	SSP->CR1 = SSPCR1_SSE;
+}
+
+void ssp_slow_clock_mode(int sspNumber){
+	LPC_SSP0_Type* SSP = getSSP(sspNumber);
+
+	// Disable SPI
+	SSP->CR1 = 0;
+
+	SSP->CR0 &= ~(0xFF00);
+	SSP->CR0 |= 0x0800;
+	SSP->CPSR = 40; // Clock prescale (minimum value is 2)
+
+	// Re-enable
+	SSP->CR1 = SSPCR1_SSE;
+}
+
+void ssp_set_bits(int sspNumber, int bits){
+	LPC_SSP0_Type* SSP = getSSP(sspNumber);
+
+	if(bits < 4 || bits > 16){
+		return;
+	}
+
+	// Disable SPI
+	SSP->CR1 = 0;
+
+	SSP->CR0 &= ~(0x0F); // Clear bit settings
+	SSP->CR0 |= ((bits - 1) & 0x0F);
+
+	// Re-enable
+	SSP->CR1 = SSPCR1_SSE;
 }
 
 /*****************************************************************************
@@ -90,104 +127,42 @@ void SSPInit(void) {
  ** Returned value:		None
  **
  *****************************************************************************/
-void SSPSend(uint8_t *buf, uint32_t Length) {
+__inline void SSPSend(uint8_t *buf, uint32_t Length) { // 8-bit functions are for SD only
 	uint32_t i;
 	uint8_t Dummy = Dummy;
 
 	for (i = 0; i < Length; i++) {
 		/* Move on only if NOT busy and TX FIFO not full. */
-		while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
+		while ((LPC_SSP1->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
 			;
-		LPC_SSP0->DR = *buf;
+		LPC_SSP1->DR = *buf;
 		buf++;
-#if !LOOPBACK_MODE
-		while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
+		while ((LPC_SSP1->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
 			;
 		/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
 		 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
 		 is left in the FIFO. */
-		Dummy = LPC_SSP0->DR;
-#else
-		/* Wait until the Busy bit is cleared. */
-		while ( LPC_SSP->SR & SSPSR_BSY );
-#endif
+		Dummy = LPC_SSP1->DR;
 	}
 	return;
 }
 
-/*****************************************************************************
- ** Function name:		SSPSend16
- **
- ** Descriptions:		Send a block of data to the SSP port, the
- **						first parameter is the buffer pointer, the 2nd
- **						parameter is the block length.
- **
- ** parameters:			buffer pointer, and the block length
- ** Returned value:		None
- **
- *****************************************************************************/
-void SSPSend16(uint16_t *buf, uint32_t Length) {
-	uint32_t i;
-	uint8_t Dummy = Dummy;
-
-	for (i = 0; i < Length; i++) {
-		/* Move on only if NOT busy and TX FIFO not full. */
-		while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF)
-			;
-		LPC_SSP0->DR = *buf;
-		buf++;
-#if !LOOPBACK_MODE
-		while ((LPC_SSP0->SR & (SSPSR_BSY | SSPSR_RNE)) != SSPSR_RNE)
-			;
-		/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
-		 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
-		 is left in the FIFO. */
-		Dummy = LPC_SSP0->DR;
-#else
-//		/* Wait until the Busy bit is cleared. */
-//		while ( LPC_SSP->SR & SSPSR_BSY );
-#endif
-	}
-	return;
-}
-
-void SSPSendC16(uint16_t c) {
+__inline void SSPSendC16(uint16_t c) { // 16-bit functions are for DAC only
 	uint8_t Dummy = Dummy;
 
 	/* Move on only if NOT busy and TX FIFO not full. */
 	while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF);
 	LPC_SSP0->DR = c;
-#if !LOOPBACK_MODE
-	while (SSP0_BUSY());
+
+	// We have no interest in reading data and this function checks
+	// busy, so we can just return
+
+	//while (SSP_BUSY(LPC_SSP0));
 	/* Whenever a byte is written, MISO FIFO counter increments, Clear FIFO
 	 on MISO. Otherwise, when SSP0Receive() is called, previous data byte
 	 is left in the FIFO. */
-	Dummy = LPC_SSP0->DR;
-#else
-//	/* Wait until the Busy bit is cleared. */
-//	while ( LPC_SSP->SR & SSPSR_BSY );
-#endif
+	//Dummy = LPC_SSP0->DR;
 
-	return;
-}
-
-/*****************************************************************************
- ** Function name:		SSPReceive
- ** Descriptions:		the module will receive a block of data from
- **						the SSP, the 2nd parameter is the block
- **						length.
- ** parameters:			buffer pointer, and block length
- ** Returned value:		None
- **
- *****************************************************************************/
-void SSPReceive(uint8_t *buf, uint32_t Length) {
-	uint32_t i;
-
-	for (i = 0; i < Length; i++) {
-		*buf = SPI_ReceiveByte();
-		buf++;
-
-	}
 	return;
 }
 
@@ -195,23 +170,18 @@ void SSPReceive(uint8_t *buf, uint32_t Length) {
  * SPI Receive Byte, receive one byte only, return Data byte
  * used a lot to check the status.
  */
-uint8_t SPI_ReceiveByte(void) {
+__inline uint8_t SPI_ReceiveByte() { // 8-bit functions are for SD only
 	uint8_t data;
 
 	/* write dummy byte out to generate clock, then read data from
 	 MISO */
-	LPC_SSP0->DR = 0xFF;
+	LPC_SSP1->DR = 0xFF;
 
 	/* Wait until the Busy bit is cleared */
-	while (SSP0_BUSY());
+	while (SSP_BUSY(LPC_SSP1));
 
-	data = LPC_SSP0->DR;
-	if(data != 255){
-		return data;
-	}else{
-		return 66;
-	}
-	//return (data);
+	data = LPC_SSP1->DR;
+	return data;
 }
 
 /******************************************************************************

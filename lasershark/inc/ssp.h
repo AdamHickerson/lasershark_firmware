@@ -13,7 +13,7 @@
 
 #include "gpio.h"
 
-#define SSP0_BUSY() 		(LPC_SSP0->SR & SSPSR_BSY)
+#define SSP_BUSY(SSPVAR) 		(SSPVAR->SR & SSPSR_BSY)
 
 #define SSP0_PORT PORT0
 #define SSP0_SSEL_DAC_BIT	2
@@ -100,11 +100,13 @@
 SSPReceive() will not be needed. */
 extern void SSP_IRQHandler (void);
 extern void SSPInit( void );
-extern void SSPSend( uint8_t *Buf, uint32_t Length );
-extern void SSPSend16( uint16_t *Buf, uint32_t Length );
-extern void SSPSendC16( uint16_t c );
-extern void SSPReceive( uint8_t *buf, uint32_t Length );
-uint8_t SPI_ReceiveByte(void);
+extern __inline void SSPSend( uint8_t *Buf, uint32_t Length );
+extern __inline void SSPSendC16( uint16_t c );
+extern __inline uint8_t SPI_ReceiveByte();
+
+void ssp_fast_clock_mode(int sspNumber);
+void ssp_slow_clock_mode(int sspNumber);
+void ssp_set_bits(int sspNumber, int bits);
 
 #endif  /* __SSP_H__ */
 /*****************************************************************************
