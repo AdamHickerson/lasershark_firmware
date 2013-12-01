@@ -124,11 +124,8 @@ void main_init(void) {
 	NVIC_SetPriority(USB_IRQ_IRQn, 2);
 }
 
-enum { INIT_DISK, MOUNT_FS, FIND_FILE, PLAY_FILE, FINISH_FILE };
+enum { INIT_DISK, MOUNT_FS, FIND_FILE, PLAY_FILE };
 int playFileState = INIT_DISK;
-
-int loopCount = 0;
-int loopFileCount = 10;
 
 int main(void) {
 	int fs_result;
@@ -185,8 +182,6 @@ int main(void) {
 				lasershark_set_ilda_rate(Buff[0] * 1000);
 
 				playFileState = PLAY_FILE;
-
-				loopCount = 0;
 			}
 			break;
 		case PLAY_FILE:
@@ -207,19 +202,9 @@ int main(void) {
 
 				if(bytesRead < FILE_READ_BYTES){
 					// EOF
-					loopCount++;
-					if(loopCount > loopFileCount){
-						f_lseek(&File, 1); // Skip first byte (sets sample rate)
-					}else{
-						playFileState = FINISH_FILE;
-					}
+					playFileState = FIND_FILE;
 				}
 			}
-		case FINISH_FILE:
-			if(lasershark_buffer_is_empty()){
-				playFileState = FIND_FILE;
-			}
-			break;
 		}
 	}
 	return 0;
