@@ -151,7 +151,7 @@ __inline void SSPSendC16(uint16_t c) { // 16-bit functions are for DAC only
 	uint8_t Dummy = Dummy;
 
 	/* Move on only if NOT busy and TX FIFO not full. */
-	while ((LPC_SSP0->SR & (SSPSR_TNF | SSPSR_BSY)) != SSPSR_TNF);
+	while (!(LPC_SSP0->SR & SSPSR_TNF)); // TNF = "Transmit Not Full" = 1 if we can continue
 	LPC_SSP0->DR = c;
 
 	// We have no interest in reading data and this function checks

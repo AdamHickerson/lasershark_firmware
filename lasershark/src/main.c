@@ -47,6 +47,12 @@ FILINFO Finfo;
 #define FILE_READ_BYTES FILE_READ_SAMPLES * 8
 BYTE Buff[FILE_READ_BYTES] __attribute__ ((aligned (4))) ;
 
+#define MAX_FILES 10
+#define MAX_FILENAME_LEN 17
+char files[MAX_FILES][MAX_FILENAME_LEN];
+int fileCount = 0;
+int currentFile = 0;
+
 bool updateDAC = false;
 
 // Variable to store CRP value in. Will be placed automatically
@@ -124,7 +130,7 @@ void main_init(void) {
 	NVIC_SetPriority(USB_IRQ_IRQn, 2);
 }
 
-enum { INIT_DISK, MOUNT_FS, FIND_FILE, PLAY_FILE };
+enum { INIT_DISK, MOUNT_FS, FIND_FILES, NEXT_FILE, PLAY_FILE };
 int playFileState = INIT_DISK;
 
 int main(void) {
@@ -148,11 +154,12 @@ int main(void) {
 			fs_result = f_mount(&FatFs, " ", 1);
 			if(fs_result == 0){
 				f_opendir(&Dir, "/");
-				playFileState = FIND_FILE;
+				playFileState = FIND_FILES;
+				fileCount = 0;
 			}
 			break;
 
-		case FIND_FILE:
+		case FIND_FILES:
 			// Look at one file per loop
 			fs_result = f_readdir(&Dir, &Finfo); // f_readdir reads the next file in the listing
 			if ((fs_result != FR_OK)){
@@ -161,8 +168,14 @@ int main(void) {
 				lasershark_output_enabled = false;
 				break;
 			}else if(!Finfo.fname[0]){
-				// End of directory. Start from the top
-				f_opendir(&Dir, "/");
+				// End of directory
+				if(fileCount > 0){
+					currentFile = 0;
+					playFileState = NEXT_FILE;
+				}else{
+					playFileState = MOUNT_FS;
+					lasershark_output_enabled = false;
+				}
 				break;
 			}
 
@@ -173,24 +186,42 @@ int main(void) {
 
 			// It's a real file. See if it's a .lsr that we can play
 			if(strncmp(&(Finfo.fname[strlen(Finfo.fname) - 4]), ".LS2", 4) == 0){
-				// Yep. Get ready to play it
-				f_open(&File, Finfo.fname, FA_READ);
-
-				// The first byte in the file specifies the sample rate
-				// in kHz
-				f_read(&File, Buff, 1, &bytesRead);
-				lasershark_set_ilda_rate(Buff[0] * 1000);
-
-				playFileState = PLAY_FILE;
+				if(fileCount < MAX_FILES && strlen(Finfo.fname) < MAX_FILENAME_LEN){
+					strncpy(files[fileCount], Finfo.fname, MAX_FILENAME_LEN);
+					files[fileCount];
+					fileCount++;
+				}
 			}
 			break;
+
+		case NEXT_FILE:
+			// Yep. Get ready to play it
+			fs_result = f_open(&File, files[currentFile], FA_READ);
+			if(fs_result != 0){
+				// Something wrong
+				playFileState = MOUNT_FS;
+				break;
+			}
+
+			// The first byte in the file specifies the sample rate
+			// in kHz
+			f_read(&File, Buff, 1, &bytesRead);
+			lasershark_set_ilda_rate(Buff[0] * 1000);
+
+			playFileState = PLAY_FILE;
+			currentFile++;
+			if(currentFile >= fileCount){
+				currentFile = 0;
+			}
+			break;
+
 		case PLAY_FILE:
 			if(lasershark_get_empty_sample_count() > FILE_READ_SAMPLES){
 				// Room for more data
 				fs_result = f_read(&File, Buff, FILE_READ_BYTES, &bytesRead);
 				if(fs_result != 0){
 					// Some read error
-					playFileState = FIND_FILE;
+					playFileState = MOUNT_FS;
 					break;
 				}
 
@@ -202,7 +233,7 @@ int main(void) {
 
 				if(bytesRead < FILE_READ_BYTES){
 					// EOF
-					playFileState = FIND_FILE;
+					playFileState = NEXT_FILE;
 				}
 			}
 		}
