@@ -79,7 +79,7 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry excluding="fatfs/option/syscall.c|fatfs/option/ccsbcs.c|fatfs/option/cc950.c|fatfs/option/cc949.c|fatfs/option/cc936.c|fatfs/option/cc932.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="lib"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="libol.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -163,7 +163,7 @@
 					</folderInfo>
 					<sourceEntries>
 						<entry excluding="fatfs/option/syscall.c|fatfs/option/ccsbcs.c|fatfs/option/cc950.c|fatfs/option/cc949.c|fatfs/option/cc936.c|fatfs/option/cc932.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="lib"/>
-						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="libol.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

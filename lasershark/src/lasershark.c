@@ -311,6 +311,16 @@ __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt) {
 	}
 }
 
+__inline void lasershark_add_sample(struct lasershark_stream_format* data){
+	lasershark_ringbuffer[lasershark_ringbuffer_tail][0] = data->a;
+	lasershark_ringbuffer[lasershark_ringbuffer_tail][1] = data->b;
+	lasershark_ringbuffer[lasershark_ringbuffer_tail][2] = data->x;
+	lasershark_ringbuffer[lasershark_ringbuffer_tail][3] = data->y;
+
+	lasershark_ringbuffer_tail = (lasershark_ringbuffer_tail + 1)
+			% LASERSHARK_RINGBUFFER_SAMPLES;
+}
+
 void CT32B1_IRQHandler(void) {
 	LPC_CT32B1->IR = 1; /* clear interrupt flag */
     uint32_t temp = (lasershark_ringbuffer_head + 1)

@@ -38,7 +38,9 @@
 #include "ff.h"
 #include "diskio.h"
 #include "dac124s085.h"
+#include "ilda.h"
 
+// FAT/File I/O Buffers/Variables
 FATFS FatFs;
 DIR Dir;
 FIL File;
@@ -47,13 +49,47 @@ FILINFO Finfo;
 #define FILE_READ_BYTES FILE_READ_SAMPLES * 8
 BYTE Buff[FILE_READ_BYTES] __attribute__ ((aligned (4))) ;
 
+// Variables for cycling between files
 #define MAX_FILES 10
 #define MAX_FILENAME_LEN 17
 char files[MAX_FILES][MAX_FILENAME_LEN];
 int fileCount = 0;
 int currentFile = 0;
 
-bool updateDAC = false;
+// ILDA Format Variables
+#define FPS 30
+#define ILDA_MAX_FRAME_POINTS 128 // We'll see how reasonable this is
+typedef enum {ILDA_START, ILDA_START_FRAME, ILDA_CONTINUE_FRAME, ILDA_PLAY_FRAME, ILDA_NEXT_FRAME} ildaState_t;
+ildaState_t ildaState;
+IldaFile frameInfo;
+IldaPoint framePoints[ILDA_MAX_FRAME_POINTS];
+int currentIldaPoint = 0;
+struct lasershark_stream_format streamBuffer;
+
+// Galvo calibration and tracking
+#define MAX_DELTA_SAMPLE (INT16_MAX * 0.25) // Set to the percentage of frame that galvo can move in 1 sample
+#define MAX_DELTA_VELOCITY (INT16_MAX * 0.05)
+IldaPoint lastPoint;
+int duplicateSampleCount = 0;
+
+__inline int velocityChange(int start, int mid, int end){
+	return abs((end - mid) - (mid - start));
+}
+
+__inline bool endsWith(char* string, char* ending){
+	int stringLength = strlen(string);
+	int endingLength = strlen(ending);
+	return strncmp(&(string[stringLength - endingLength]), ending, endingLength) == 0;
+}
+
+uint16_t SCALE_FRAME_U16(int16_t val){
+	volatile int temp = (int) val;
+	temp -= INT16_MIN; // force positive
+	temp *= (DAC124S085_DAC_VAL_MAX * .75);
+	temp /= (INT16_MAX - INT16_MIN);
+	temp += DAC124S085_DAC_VAL_MAX * .25 / 2;
+	return temp;
+}
 
 // Variable to store CRP value in. Will be placed automatically
 // by the linker when "Enable Code Read Protect" selected.
@@ -130,12 +166,13 @@ void main_init(void) {
 	NVIC_SetPriority(USB_IRQ_IRQn, 2);
 }
 
-enum { INIT_DISK, MOUNT_FS, FIND_FILES, NEXT_FILE, PLAY_FILE };
-int playFileState = INIT_DISK;
+typedef enum { INIT_DISK, MOUNT_FS, FIND_FILES, NEXT_FILE, PLAY_RAW_FILE, PLAY_ILDA_FILE } playFileState_t;
+playFileState_t playFileState = INIT_DISK;
 
 int main(void) {
 	int fs_result;
 	uint32_t bytesRead;
+	int i;
 
 	main_init();
 	//watchdog_init();
@@ -184,11 +221,10 @@ int main(void) {
 				break;
 			}
 
-			// It's a real file. See if it's a .lsr that we can play
-			if(strncmp(&(Finfo.fname[strlen(Finfo.fname) - 4]), ".LS2", 4) == 0){
+			// It's a real file. See if it's a .ls2 or .ild that we can play
+			if(endsWith(Finfo.fname, ".LS2") || endsWith(Finfo.fname, ".ILD")){
 				if(fileCount < MAX_FILES && strlen(Finfo.fname) < MAX_FILENAME_LEN){
 					strncpy(files[fileCount], Finfo.fname, MAX_FILENAME_LEN);
-					files[fileCount];
 					fileCount++;
 				}
 			}
@@ -196,6 +232,7 @@ int main(void) {
 
 		case NEXT_FILE:
 			// Yep. Get ready to play it
+			currentFile = 0;
 			fs_result = f_open(&File, files[currentFile], FA_READ);
 			if(fs_result != 0){
 				// Something wrong
@@ -203,19 +240,28 @@ int main(void) {
 				break;
 			}
 
-			// The first byte in the file specifies the sample rate
-			// in kHz
-			f_read(&File, Buff, 1, &bytesRead);
-			lasershark_set_ilda_rate(Buff[0] * 1000);
+			if(endsWith(files[currentFile], ".LS2")){
+				// Raw format
+				// To start playing a raw file, read in the sample
+				// rate (first byte) and set accordingly
+				f_read(&File, Buff, 1, &bytesRead);
+				lasershark_set_ilda_rate(Buff[0] * 1000);
+				playFileState = PLAY_RAW_FILE;
+			}else{
+				// ILDA format
+				//
+				ildaState = ILDA_START;
+				lasershark_set_ilda_rate(16000);
+				playFileState = PLAY_ILDA_FILE;
+			}
 
-			playFileState = PLAY_FILE;
 			currentFile++;
 			if(currentFile >= fileCount){
 				currentFile = 0;
 			}
 			break;
 
-		case PLAY_FILE:
+		case PLAY_RAW_FILE:
 			if(lasershark_get_empty_sample_count() > FILE_READ_SAMPLES){
 				// Room for more data
 				fs_result = f_read(&File, Buff, FILE_READ_BYTES, &bytesRead);
@@ -235,6 +281,79 @@ int main(void) {
 					// EOF
 					playFileState = NEXT_FILE;
 				}
+			}
+			break;
+
+		case PLAY_ILDA_FILE:
+			switch(ildaState){
+			case ILDA_START:
+				ildaState = ILDA_START_FRAME;
+				break;
+
+			case ILDA_START_FRAME:
+				switch(olLoadIldaFrame(&File, &frameInfo, framePoints, ILDA_MAX_FRAME_POINTS)){
+				case FILE_ERROR:
+				case FRAME_SKIPPED:
+					// Can't use file anymore
+					playFileState = NEXT_FILE;
+					break;
+				case FRAME_LOADED:
+					ildaState = ILDA_PLAY_FRAME; // Next read will error
+					currentIldaPoint = 0; // Just to make a nice breakpoint
+					break;
+				}
+				break;
+
+			case ILDA_CONTINUE_FRAME:
+				switch(olLoadIldaPoints(&File, &frameInfo, framePoints, ILDA_MAX_FRAME_POINTS)){
+				case FILE_ERROR:
+				case FRAME_SKIPPED:
+					// File can't be read
+					playFileState = NEXT_FILE;
+					break;
+				case FRAME_LOADED:
+					ildaState = ILDA_PLAY_FRAME;
+					currentIldaPoint = 0;
+				}
+				break;
+
+			case ILDA_PLAY_FRAME:
+
+				i = 0; // Only allow a few to be loaded each time around
+				while(lasershark_get_empty_sample_count() > 1 && currentIldaPoint < frameInfo.loadedPointCount && i < 200){
+					// Load the buffer with samples in the stream format
+					streamBuffer.x = SCALE_FRAME_U16(framePoints[currentIldaPoint].x);
+					streamBuffer.y = SCALE_FRAME_U16(framePoints[currentIldaPoint].y);
+					streamBuffer.a = framePoints[currentIldaPoint].color == 0 ? DAC124S085_DAC_VAL_MIN : DAC124S085_DAC_VAL_MAX; // Todo: Color scale
+					streamBuffer.b = streamBuffer.a;
+
+					lasershark_add_sample(&streamBuffer);
+
+					i++;
+					currentIldaPoint++;
+				}
+
+				if(lasershark_get_empty_sample_count() < 10){
+					lasershark_output_enabled = true;
+				}
+
+				if(currentIldaPoint >= frameInfo.loadedPointCount){
+					currentIldaPoint = 0;
+					//frameInfo.displayCount++;
+					//if(frameInfo.displayCount > 2){
+						ildaState = ILDA_NEXT_FRAME;
+					//}
+				}
+				break;
+
+			case ILDA_NEXT_FRAME:
+				if(frameInfo.loadedStartPoint + frameInfo.loadedPointCount >= frameInfo.totalPoints){
+					// All points were loaded last round. Next frame
+					ildaState = ILDA_START_FRAME;
+				}else{
+					ildaState = ILDA_CONTINUE_FRAME;
+				}
+				break;
 			}
 		}
 	}

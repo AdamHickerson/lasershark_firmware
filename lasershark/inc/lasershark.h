@@ -116,6 +116,13 @@ uint32_t lasershark_core_duration;
 
 bool lasershark_output_enabled;
 
+struct lasershark_stream_format {
+	uint16_t x;
+	uint16_t y;
+	uint16_t a;
+	uint16_t b;
+} __attribute__((packed));
+
 void lasershark_init();
 
 void lasershark_process_command();
@@ -125,6 +132,7 @@ bool lasershark_set_ilda_rate(uint32_t ilda_rate);
 __inline uint32_t lasershark_get_empty_sample_count();
 
 __inline void lasershark_process_data(unsigned char* packet, uint32_t cnt);
+__inline void lasershark_add_sample(struct lasershark_stream_format*);
 
 __inline bool lasershark_buffer_is_empty();
 
